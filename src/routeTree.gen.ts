@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedCadastrosRouteImport } from './routes/_authenticated/cadastros'
+import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedEscalaRouteImport } from './routes/_authenticated/escala'
 import { Route as AuthenticatedFornecedoresRouteImport } from './routes/_authenticated/fornecedores'
@@ -33,6 +34,12 @@ const AuthenticatedCadastrosRoute = AuthenticatedCadastrosRouteImport.update({
   path: '/cadastros',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedConfiguracoesRoute =
+  AuthenticatedConfiguracoesRouteImport.update({
+    id: '/configuracoes',
+    path: '/configuracoes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -68,6 +75,7 @@ const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cadastros': typeof AuthenticatedCadastrosRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/escala': typeof AuthenticatedEscalaRoute
   '/fornecedores': typeof AuthenticatedFornecedoresRoute
@@ -78,6 +86,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cadastros': typeof AuthenticatedCadastrosRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/escala': typeof AuthenticatedEscalaRoute
   '/fornecedores': typeof AuthenticatedFornecedoresRoute
@@ -90,6 +99,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/_authenticated/cadastros': typeof AuthenticatedCadastrosRoute
+  '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/escala': typeof AuthenticatedEscalaRoute
   '/_authenticated/fornecedores': typeof AuthenticatedFornecedoresRoute
@@ -102,6 +112,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/cadastros'
+    | '/configuracoes'
     | '/dashboard'
     | '/escala'
     | '/fornecedores'
@@ -112,6 +123,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/cadastros'
+    | '/configuracoes'
     | '/dashboard'
     | '/escala'
     | '/fornecedores'
@@ -123,6 +135,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/_authenticated/cadastros'
+    | '/_authenticated/configuracoes'
     | '/_authenticated/dashboard'
     | '/_authenticated/escala'
     | '/_authenticated/fornecedores'
@@ -157,6 +170,13 @@ declare module '@tanstack/react-router' {
       path: '/cadastros'
       fullPath: '/cadastros'
       preLoaderRoute: typeof AuthenticatedCadastrosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/configuracoes': {
+      id: '/_authenticated/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard': {
@@ -206,6 +226,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedCadastrosRoute: typeof AuthenticatedCadastrosRoute
+  AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedEscalaRoute: typeof AuthenticatedEscalaRoute
   AuthenticatedFornecedoresRoute: typeof AuthenticatedFornecedoresRoute
@@ -216,6 +237,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCadastrosRoute: AuthenticatedCadastrosRoute,
+  AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedEscalaRoute: AuthenticatedEscalaRoute,
   AuthenticatedFornecedoresRoute: AuthenticatedFornecedoresRoute,
