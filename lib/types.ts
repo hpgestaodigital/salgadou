@@ -75,6 +75,8 @@ export type PagamentoFornecedor = {
   pago_em: string | null
   comprovante: string | null
   responsavel: string | null
+  anexo_url?: string | null
+  anexo_path?: string | null
   created_at: string
 }
 
@@ -90,6 +92,8 @@ export type PagamentoMotoboy = {
   pix: string | null
   pago_em: string | null
   observacao: string | null
+  anexo_url?: string | null
+  anexo_path?: string | null
   created_at: string
 }
 

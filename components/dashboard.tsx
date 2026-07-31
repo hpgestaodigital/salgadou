@@ -14,9 +14,9 @@ import {
   Wallet,
 } from "lucide-react"
 import { useTable } from "@/lib/use-data"
-import type { Colaborador, Configuracao, Motoboy, PagamentoFornecedor, PagamentoMotoboy } from "@/lib/types"
+import { isSocio, type Colaborador, type Configuracao, type Escala, type Motoboy, type PagamentoFornecedor, type PagamentoMotoboy } from "@/lib/types"
 import type { TarefaKanban } from "@/lib/kanban-data"
-import { formatBRL, formatDate, todayISO } from "@/lib/format"
+import { formatBRL, formatDate, mondayOf, todayISO } from "@/lib/format"
 import { PageHeader } from "@/components/page-header"
 import { StatCard } from "@/components/stat-card"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,6 +36,7 @@ export function Dashboard() {
   const { data: motoboys } = useTable<Motoboy>("motoboys")
   const { data: tarefas } = useTable<TarefaKanban>("kanban_tarefas", { column: "prazo", ascending: true })
   const { data: configuracoes } = useTable<Configuracao>("configuracoes")
+  const { data: escalas } = useTable<Escala>("escala")
 
   const hoje = todayISO()
   const mesAtual = hoje.slice(0, 7)
@@ -55,6 +56,14 @@ export function Dashboard() {
   }
   const socios = resumo("socios")
   const equipe = resumo("colaboradores")
+  const colaboradoresAtivos = colaboradores.filter((c) => c.ativo && !isSocio(c))
+  const sociosAtivos = colaboradores.filter((c) => c.ativo && isSocio(c))
+  const motoboysAtivos = motoboys.filter((m) => m.ativo)
+  const idsEscalados = new Set(
+    escalas
+      .filter((e) => e.semana_inicio === mondayOf(hoje) && ["seg", "ter", "qua", "qui", "sex", "sab", "dom"].some((dia) => Boolean(e[dia as keyof Escala])))
+      .map((e) => e.colaborador_id),
+  )
 
   return (
     <div>
@@ -103,12 +112,7 @@ export function Dashboard() {
           icon={Wallet}
           tone="success"
         />
-        <StatCard
-          label="Equipe ativa"
-          value={`${colaboradores.filter((c) => c.ativo).length + motoboys.filter((m) => m.ativo).length}`}
-          hint={`${colaboradores.filter((c) => c.ativo).length} pessoas · ${motoboys.filter((m) => m.ativo).length} motoboys`}
-          icon={Users}
-        />
+        <TeamCard colaboradores={colaboradoresAtivos} socios={sociosAtivos} motoboys={motoboysAtivos} escalados={idsEscalados} />
         <StatCard
           label="Pendências — Sócios"
           value={`${socios.total} tarefa(s)`}
@@ -240,4 +244,41 @@ function TaskList({ tarefas, vazio, atrasadas }: { tarefas: TarefaKanban[]; vazi
 
 function Empty({ text }: { text: string }) {
   return <p className="py-10 text-center text-sm text-muted-foreground">{text}</p>
+}
+
+function TeamCard({ colaboradores, socios, motoboys, escalados }: {
+  colaboradores: Colaborador[]
+  socios: Colaborador[]
+  motoboys: Motoboy[]
+  escalados: Set<string>
+}) {
+  const total = colaboradores.length + socios.length + motoboys.length
+  const nomes = [...socios, ...colaboradores, ...motoboys]
+  const lista = (
+    <div className="grid gap-1.5 text-xs">
+      {!nomes.length ? <p>Nenhuma pessoa ativa cadastrada.</p> : nomes.map((p) => (
+        <p key={p.id}>{p.nome}{escalados.has(p.id) ? " · escalado nesta semana" : ""}</p>
+      ))}
+      {nomes.length > 0 && escalados.size === 0 && <p className="mt-1 text-muted-foreground">Nenhuma escala preenchida para a semana atual.</p>}
+    </div>
+  )
+  return (
+    <Card className="group relative p-5 sm:p-6" tabIndex={0}>
+      <div className="flex items-start justify-between">
+        <div className="space-y-2">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Equipe ativa</p>
+          <p className="font-heading text-2xl font-extrabold">{total}</p>
+          <p className="text-xs text-muted-foreground">{colaboradores.length} colaboradores · {motoboys.length} motoboys · {socios.length} sócios</p>
+        </div>
+        <span className="grid size-11 place-items-center rounded-xl bg-white/5"><Users className="size-5" /></span>
+      </div>
+      <div className="absolute inset-x-4 top-[calc(100%-8px)] z-20 hidden rounded-xl border border-border bg-popover p-4 shadow-2xl group-hover:block group-focus:block lg:block lg:invisible lg:opacity-0 lg:transition lg:group-hover:visible lg:group-hover:opacity-100 lg:group-focus:visible lg:group-focus:opacity-100">
+        <p className="mb-2 font-semibold">Pessoas disponíveis</p>{lista}
+      </div>
+      <details className="mt-3 lg:hidden">
+        <summary className="cursor-pointer text-xs font-semibold text-primary">Ver pessoas</summary>
+        <div className="mt-3 rounded-lg bg-muted/40 p-3">{lista}</div>
+      </details>
+    </Card>
+  )
 }

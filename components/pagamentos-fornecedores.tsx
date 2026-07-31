@@ -11,6 +11,7 @@ import { enviarWhatsapp, preencherTemplate, TEMPLATE_KEYS } from "@/lib/whatsapp
 import { PageHeader } from "@/components/page-header"
 import { StatCard } from "@/components/stat-card"
 import { ConfirmDeleteButton } from "@/components/confirm-button"
+import { PaymentAttachmentField } from "@/components/payment-attachment-field"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,6 +38,8 @@ const vazio = {
   valor: "",
   observacao: "",
   responsavel: "",
+  anexo_url: "",
+  anexo_path: "",
 }
 
 export function PagamentosFornecedores() {
@@ -125,6 +128,8 @@ export function PagamentosFornecedores() {
       valor: String(p.valor ?? ""),
       observacao: p.observacao ?? "",
       responsavel: p.responsavel ?? "",
+      anexo_url: p.anexo_url ?? "",
+      anexo_path: p.anexo_path ?? "",
     })
     setOpen(true)
   }
@@ -143,6 +148,8 @@ export function PagamentosFornecedores() {
         valor: Number(form.valor) || 0,
         observacao: form.observacao || null,
         responsavel: form.responsavel || null,
+        anexo_url: form.anexo_url || null,
+        anexo_path: form.anexo_path || null,
       }
       const { error } = editId
         ? await supabase.from("pagamentos_fornecedores").update(payload).eq("id", editId)
@@ -380,6 +387,11 @@ export function PagamentosFornecedores() {
                 rows={2}
               />
             </div>
+            <PaymentAttachmentField
+              url={form.anexo_url}
+              path={form.anexo_path}
+              onChange={(anexo) => setForm({ ...form, anexo_url: anexo.url, anexo_path: anexo.path })}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>

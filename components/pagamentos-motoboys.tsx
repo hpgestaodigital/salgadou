@@ -11,6 +11,7 @@ import { enviarWhatsapp, preencherTemplate, TEMPLATE_KEYS } from "@/lib/whatsapp
 import { PageHeader } from "@/components/page-header"
 import { StatCard } from "@/components/stat-card"
 import { ConfirmDeleteButton } from "@/components/confirm-button"
+import { PaymentAttachmentField } from "@/components/payment-attachment-field"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,6 +32,8 @@ const vazio = {
   valor_taxas: "",
   valor_diaria: "",
   observacao: "",
+  anexo_url: "",
+  anexo_path: "",
 }
 
 type EntregaDraft = {
@@ -145,6 +148,8 @@ export function PagamentosMotoboys() {
       valor_taxas: String(p.valor_taxas ?? ""),
       valor_diaria: String(p.valor_diaria ?? ""),
       observacao: p.observacao ?? "",
+      anexo_url: p.anexo_url ?? "",
+      anexo_path: p.anexo_path ?? "",
     })
     setEntregasForm(
       entregas.filter((entrega) => entrega.pagamento_id === p.id).map((entrega) => ({
@@ -186,6 +191,8 @@ export function PagamentosMotoboys() {
         valor_diaria: Number(form.valor_diaria) || 0,
         total,
         observacao: form.observacao || null,
+        anexo_url: form.anexo_url || null,
+        anexo_path: form.anexo_path || null,
       }
       const result = editId
         ? await supabase.from("pagamentos_motoboys").update(payload).eq("id", editId).select("id").single()
@@ -502,6 +509,11 @@ export function PagamentosMotoboys() {
                 rows={2}
               />
             </div>
+            <PaymentAttachmentField
+              url={form.anexo_url}
+              path={form.anexo_path}
+              onChange={(anexo) => setForm({ ...form, anexo_url: anexo.url, anexo_path: anexo.path })}
+            />
             <div className="sm:col-span-2 flex items-center justify-between rounded-lg bg-muted px-4 py-3">
               <span className="text-sm font-semibold text-muted-foreground">Total a pagar</span>
               <span className="font-heading text-xl font-extrabold text-primary">{formatBRL(total)}</span>
