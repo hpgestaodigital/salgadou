@@ -16,7 +16,7 @@ type MetadataUsuario = {
 type UsuarioLike = {
   email?: string | null
   user_metadata?: MetadataUsuario | null
-  app_metadata?: { role?: string } | null
+  app_metadata?: (Record<string, unknown> & { role?: string }) | null
 } | null
 
 export function getPapel(user: UsuarioLike): Papel {

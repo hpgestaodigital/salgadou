@@ -120,12 +120,18 @@ export function ReunioesView() {
 
   async function excluirReuniao(id: string) {
     const { error } = await supabase.from("reunioes").delete().eq("id", id)
-    if (error) return toast.error("Não foi possível excluir a reunião.")
+    if (error) {
+      toast.error("Não foi possível excluir a reunião.")
+      return
+    }
     mutateReunioes(); mutateItens(); toast.success("Reunião excluída.")
   }
   async function excluirItem(id: string) {
     const { error } = await supabase.from("reunioes_itens").delete().eq("id", id)
-    if (error) return toast.error("Não foi possível excluir o item.")
+    if (error) {
+      toast.error("Não foi possível excluir o item.")
+      return
+    }
     mutateItens(); toast.success("Item excluído.")
   }
 

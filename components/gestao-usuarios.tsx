@@ -30,7 +30,11 @@ const vazio = { nome: "", email: "", senha: "", papel: "socio" as Papel }
 async function fetcher(url: string) {
   const res = await fetch(url)
   const json = await res.json()
-  if (!res.ok) throw new Error(json.error || "Erro ao carregar usuários.")
+  if (!res.ok) {
+    const error = new Error(json.error || "Erro ao carregar usuários.") as Error & { code?: string }
+    error.code = json.code
+    throw error
+  }
   return json.usuarios as UsuarioApi[]
 }
 
@@ -82,6 +86,8 @@ export function GestaoUsuarios() {
   }
 
   const usuarios = data ?? []
+  const servicoAdministrativoIndisponivel =
+    (error as (Error & { code?: string }) | undefined)?.code === "ADMIN_SERVICE_NOT_CONFIGURED"
 
   return (
     <div>
@@ -89,7 +95,7 @@ export function GestaoUsuarios() {
         title="Usuários"
         description="Gerencie o acesso dos sócios e da equipe ao sistema."
         action={
-          <Button onClick={abrirNovo}>
+          <Button onClick={abrirNovo} disabled={servicoAdministrativoIndisponivel}>
             <Plus className="size-4" />
             Novo usuário
           </Button>
@@ -99,6 +105,11 @@ export function GestaoUsuarios() {
       {error && (
         <Card className="p-4 mb-4 border-destructive/40">
           <p className="text-sm text-destructive">{(error as Error).message}</p>
+          {servicoAdministrativoIndisponivel && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Solicite ao responsável pela implantação que habilite a gestão administrativa no servidor.
+            </p>
+          )}
         </Card>
       )}
 

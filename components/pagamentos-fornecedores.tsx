@@ -151,7 +151,7 @@ export function PagamentosFornecedores() {
         valor: Number(form.valor) || 0,
         observacao: form.observacao || null,
         responsavel: form.responsavel || null,
-        anexo_url: form.anexo_url || null,
+        anexo_url: form.anexo_path ? null : form.anexo_url || null,
         anexo_path: form.anexo_path || null,
       }
       const result = editId

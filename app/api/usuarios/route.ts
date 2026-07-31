@@ -13,7 +13,13 @@ async function exigirAdmin() {
 
 function tratarErroServico(e: unknown) {
   if (e instanceof Error && e.message === "SERVICE_ROLE_MISSING") {
-    return NextResponse.json({ error: "A chave de serviço do Supabase não está configurada." }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "A gestão de usuários ainda não está habilitada neste ambiente.",
+        code: "ADMIN_SERVICE_NOT_CONFIGURED",
+      },
+      { status: 503 },
+    )
   }
   console.log("[v0] erro api usuarios:", e)
   return NextResponse.json({ error: "Erro ao processar a solicitação." }, { status: 500 })
