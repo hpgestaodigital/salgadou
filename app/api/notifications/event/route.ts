@@ -7,6 +7,9 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
   const body = await request.json()
-  if (!["fornecedor", "motoboy", "tarefa"].includes(body.tipo) || !body.id) return NextResponse.json({ error: "Dados inválidos." }, { status: 400 })
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  if (!["fornecedor", "motoboy", "tarefa"].includes(body.tipo) || !uuid.test(String(body.id ?? ""))) {
+    return NextResponse.json({ error: "Dados inválidos." }, { status: 400 })
+  }
   return NextResponse.json(await notificarRegistro(body.tipo, body.id, "novo", "insert"))
 }

@@ -8,8 +8,8 @@ export async function POST(request: Request) {
     const numero = String(body?.numero ?? "").replace(/\D/g, "")
     const mensagem = String(body?.mensagem ?? "").trim()
 
-    if (!numero || !mensagem) {
-      return NextResponse.json({ error: "Número e mensagem são obrigatórios." }, { status: 400 })
+    if (!/^\d{10,15}$/.test(numero) || !mensagem || mensagem.length > 4000) {
+      return NextResponse.json({ error: "Número inválido ou mensagem fora do limite de 4.000 caracteres." }, { status: 400 })
     }
 
     const supabase = await createClient()

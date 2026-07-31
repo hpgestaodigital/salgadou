@@ -32,7 +32,7 @@ export async function GET() {
       id: u.id,
       email: u.email,
       nome: (u.user_metadata?.nome as string) || "",
-      papel: (u.email === ADMIN_EMAIL ? "admin" : (u.user_metadata?.role as string)) || "colaborador",
+      papel: (u.email === ADMIN_EMAIL ? "admin" : (u.app_metadata?.role as string)) || "colaborador",
       criado_em: u.created_at,
     }))
     return NextResponse.json({ usuarios })
@@ -64,7 +64,8 @@ export async function POST(request: Request) {
       email,
       password: senha,
       email_confirm: true,
-      user_metadata: { role: papel, nome },
+      user_metadata: { nome },
+      app_metadata: { role: papel },
     })
     if (error) {
       const msg = error.message.toLowerCase()

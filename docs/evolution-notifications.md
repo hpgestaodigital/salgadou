@@ -5,7 +5,8 @@
 1. Aplique no Supabase, em ordem, as migrações até
    `20260731090000_notifications.sql`.
 2. Configure no ambiente do servidor:
-   `SUPABASE_SERVICE_ROLE_KEY`, `EVOLUTION_API_KEY` e `CRON_SECRET`.
+   `SUPABASE_SERVICE_ROLE_KEY`, `EVOLUTION_API_KEY`, `EVOLUTION_API_URL`
+   (obrigatoriamente HTTPS em produção) e `CRON_SECRET`.
    Nunca use essas chaves em variáveis `NEXT_PUBLIC_*`.
 3. Em **Configurações**, informe a URL da Evolution API, o nome da
    instância e ative as notificações.

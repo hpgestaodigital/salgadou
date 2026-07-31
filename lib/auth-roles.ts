@@ -16,12 +16,13 @@ type MetadataUsuario = {
 type UsuarioLike = {
   email?: string | null
   user_metadata?: MetadataUsuario | null
+  app_metadata?: { role?: string } | null
 } | null
 
 export function getPapel(user: UsuarioLike): Papel {
   if (!user) return "colaborador"
   if (user.email === ADMIN_EMAIL) return "admin"
-  const role = user.user_metadata?.role
+  const role = user.app_metadata?.role
   if (role === "admin" || role === "socio" || role === "colaborador") return role
   return "colaborador"
 }
