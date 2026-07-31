@@ -52,7 +52,7 @@ export const Route = createFileRoute("/_authenticated/fornecedores")({
       },
     ],
   }),
-  component: SupplierPayments;
+  component: SupplierPayments,
 });
 
 type Form = {
