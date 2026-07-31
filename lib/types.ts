@@ -10,6 +10,7 @@ export type Colaborador = {
   observacoes_contrato?: string | null
   funcao: string | null
   ativo: boolean
+  notificacoes_whatsapp?: boolean | null
   created_at: string
 }
 
@@ -92,6 +93,7 @@ export type PagamentoMotoboy = {
   pix: string | null
   pago_em: string | null
   observacao: string | null
+  responsavel?: string | null
   anexo_url?: string | null
   anexo_path?: string | null
   created_at: string

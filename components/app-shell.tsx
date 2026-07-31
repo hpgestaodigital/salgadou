@@ -16,6 +16,7 @@ import {
   KanbanSquare,
   ShieldCheck,
   LogOut,
+  MessagesSquare,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -29,6 +30,7 @@ const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
   { href: "/escala", label: "Escala Semanal", icon: CalendarDays, adminOnly: false },
   { href: "/kanban", label: "Kanban", icon: KanbanSquare, adminOnly: false },
+  { href: "/reunioes", label: "Reuniões", icon: MessagesSquare, adminOnly: false },
   { href: "/pagamentos-fornecedores", label: "Pagto. Fornecedores", icon: Truck, adminOnly: false },
   { href: "/pagamentos-motoboys", label: "Pagto. Motoboys", icon: Bike, adminOnly: false },
   { href: "/cadastros", label: "Cadastros", icon: Users, adminOnly: false },

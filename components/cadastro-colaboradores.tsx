@@ -35,6 +35,7 @@ const vazio = {
   valor: "",
   observacoes: "",
   ativo: true,
+  notificacoes_whatsapp: true,
 }
 
 export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto?: "socios" | "colaboradores" }) {
@@ -66,6 +67,7 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
       valor: String(c.valor_pagamento ?? c.valor_diaria ?? ""),
       observacoes: c.observacoes_contrato ?? "",
       ativo: c.ativo,
+      notificacoes_whatsapp: c.notificacoes_whatsapp ?? true,
     })
     setOpen(true)
   }
@@ -88,6 +90,7 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
         periodicidade_pagamento: socio ? "mensal" : form.periodicidade,
         valor_pagamento: Number(form.valor) || 0,
         observacoes_contrato: form.observacoes || null,
+        notificacoes_whatsapp: form.notificacoes_whatsapp,
       }
       let { error } = editId
         ? await supabase.from("colaboradores").update(payload).eq("id", editId)
@@ -277,6 +280,17 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
             <div className="flex items-center justify-between rounded-lg border px-4 py-3 sm:col-span-2">
               <Label htmlFor={`${contexto}-ativo`}>Cadastro ativo</Label>
               <Switch id={`${contexto}-ativo`} checked={form.ativo} onCheckedChange={(ativo) => setForm({ ...form, ativo })} />
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3 sm:col-span-2">
+              <div>
+                <Label htmlFor={`${contexto}-notificacoes`}>Receber notificações no WhatsApp</Label>
+                <p className="mt-1 text-xs text-muted-foreground">Usa o número informado neste cadastro.</p>
+              </div>
+              <Switch
+                id={`${contexto}-notificacoes`}
+                checked={form.notificacoes_whatsapp}
+                onCheckedChange={(notificacoes_whatsapp) => setForm({ ...form, notificacoes_whatsapp })}
+              />
             </div>
           </div>
           <DialogFooter>

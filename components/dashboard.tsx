@@ -163,7 +163,7 @@ export function Dashboard() {
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{p.motoboy_nome ?? "Motoboy não definido"}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {formatDate(p.data)} · Atribuído a: <span className="text-foreground/80">{p.motoboy_nome ?? "Não definido"}</span>
+                      {formatDate(p.data)} · Responsável: <span className="text-foreground/80">{p.responsavel || "Não definido"}</span>
                     </p>
                   </div>
                   <div className="text-right">

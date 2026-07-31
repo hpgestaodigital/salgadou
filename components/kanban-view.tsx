@@ -89,11 +89,19 @@ export function KanbanView() {
       prazo: form.prazo || null,
       ...(!editId ? { status: "nao_realizado" } : {}),
     }
-    const { error } = editId
-      ? await supabase.from("kanban_tarefas").update(payload).eq("id", editId)
-      : await supabase.from("kanban_tarefas").insert(payload)
+    const result = editId
+      ? await supabase.from("kanban_tarefas").update(payload).eq("id", editId).select("id").single()
+      : await supabase.from("kanban_tarefas").insert(payload).select("id").single()
+    const { error } = result
     setSaving(false)
     if (error) return toast.error("Não foi possível salvar. Verifique se a migração do banco foi aplicada.")
+    if (!editId && result.data?.id) {
+      void fetch("/api/notifications/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "tarefa", id: result.data.id }),
+      }).catch(() => undefined)
+    }
     toast.success(editId ? "Tarefa atualizada." : "Tarefa criada.")
     setOpen(false)
     mutate()

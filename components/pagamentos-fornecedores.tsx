@@ -4,8 +4,9 @@ import { useMemo, useState } from "react"
 import { CheckCircle2, Loader2, Pencil, Plus, RotateCcw, Search, Send } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
+import { mensagemErroSupabase } from "@/lib/supabase/friendly-error"
 import { useTable } from "@/lib/use-data"
-import type { Configuracao, Fornecedor, PagamentoFornecedor } from "@/lib/types"
+import type { Colaborador, Configuracao, Fornecedor, PagamentoFornecedor } from "@/lib/types"
 import { formatBRL, formatDate, todayISO } from "@/lib/format"
 import { enviarWhatsapp, preencherTemplate, TEMPLATE_KEYS } from "@/lib/whatsapp"
 import { PageHeader } from "@/components/page-header"
@@ -20,6 +21,7 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -49,6 +51,7 @@ export function PagamentosFornecedores() {
     ascending: true,
   })
   const { data: fornecedores } = useTable<Fornecedor>("fornecedores", { column: "nome" })
+  const { data: pessoas } = useTable<Colaborador>("colaboradores", { column: "nome" })
   const { data: config } = useTable<Configuracao>("configuracoes")
 
   const [filtro, setFiltro] = useState<Filtro>("todos")
@@ -151,16 +154,24 @@ export function PagamentosFornecedores() {
         anexo_url: form.anexo_url || null,
         anexo_path: form.anexo_path || null,
       }
-      const { error } = editId
-        ? await supabase.from("pagamentos_fornecedores").update(payload).eq("id", editId)
-        : await supabase.from("pagamentos_fornecedores").insert(payload)
+      const result = editId
+        ? await supabase.from("pagamentos_fornecedores").update(payload).eq("id", editId).select("id").single()
+        : await supabase.from("pagamentos_fornecedores").insert(payload).select("id").single()
+      const { error } = result
       if (error) throw error
+      if (!editId && result.data?.id) {
+        void fetch("/api/notifications/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tipo: "fornecedor", id: result.data.id }),
+        }).catch(() => undefined)
+      }
       toast.success(editId ? "Conta atualizada." : "Conta adicionada.")
       setOpen(false)
       mutate()
     } catch (e) {
       console.log("[v0] erro salvar fornecedor:", e)
-      toast.error("Erro ao salvar.")
+      toast.error(mensagemErroSupabase(e))
     } finally {
       setSaving(false)
     }
@@ -370,13 +381,19 @@ export function PagamentosFornecedores() {
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="responsavel">Responsável</Label>
-              <Input
-                id="responsavel"
-                value={form.responsavel}
-                onChange={(e) => setForm({ ...form, responsavel: e.target.value })}
-                placeholder="Quem paga"
-              />
+              <Label>Responsável pelo pagamento</Label>
+              <Select
+                value={form.responsavel || "sem_responsavel"}
+                onValueChange={(nome) => setForm({ ...form, responsavel: nome === "sem_responsavel" ? "" : nome ?? "" })}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sem_responsavel">Não definido (avisar sócios)</SelectItem>
+                  {pessoas.filter((p) => p.ativo).map((p) => (
+                    <SelectItem key={p.id} value={p.nome}>{p.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-1.5 sm:col-span-2">
               <Label htmlFor="obs">Observação</Label>

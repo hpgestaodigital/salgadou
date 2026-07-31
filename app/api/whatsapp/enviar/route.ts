@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { enviarEvolution } from "@/lib/evolution/server"
 
 export async function POST(request: Request) {
   try {
@@ -12,10 +13,14 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createClient()
+    const { data: auth } = await supabase.auth.getUser()
+    if (!auth.user) {
+      return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
+    }
     const { data, error } = await supabase
       .from("configuracoes")
       .select("chave, valor")
-      .in("chave", ["evolution_url", "evolution_instance", "evolution_apikey"])
+      .in("chave", ["evolution_url", "evolution_instance"])
 
     if (error) {
       return NextResponse.json({ error: "Erro ao ler configurações." }, { status: 500 })
@@ -24,30 +29,14 @@ export async function POST(request: Request) {
     const cfg = Object.fromEntries((data ?? []).map((r) => [r.chave, r.valor])) as Record<string, string | null>
     const url = cfg.evolution_url
     const instance = cfg.evolution_instance
-    const apikey = cfg.evolution_apikey
-
-    if (!url || !instance || !apikey) {
+    if (!url || !instance || !process.env.EVOLUTION_API_KEY) {
       return NextResponse.json(
         { error: "Evolution API não configurada. Preencha em Configurações." },
         { status: 400 },
       )
     }
 
-    const endpoint = `${url.replace(/\/$/, "")}/message/sendText/${instance}`
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey,
-      },
-      body: JSON.stringify({ number: numero, text: mensagem }),
-    })
-
-    if (!resp.ok) {
-      const detail = await resp.text().catch(() => "")
-      console.log("[v0] evolution api erro:", resp.status, detail)
-      return NextResponse.json({ error: "Falha ao enviar pela Evolution API." }, { status: 502 })
-    }
+    await enviarEvolution(numero, mensagem, { url, instance })
 
     return NextResponse.json({ ok: true })
   } catch (e) {

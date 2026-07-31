@@ -4,8 +4,9 @@ import { useMemo, useState } from "react"
 import { Bike, CheckCircle2, Loader2, Pencil, Plus, RotateCcw, Search, Send, Trash2, Wallet, Package } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
+import { mensagemErroSupabase } from "@/lib/supabase/friendly-error"
 import { useTable } from "@/lib/use-data"
-import type { Configuracao, EntregaMotoboy, Motoboy, PagamentoMotoboy } from "@/lib/types"
+import type { Colaborador, Configuracao, EntregaMotoboy, Motoboy, PagamentoMotoboy } from "@/lib/types"
 import { formatBRL, formatDate, todayISO } from "@/lib/format"
 import { enviarWhatsapp, preencherTemplate, TEMPLATE_KEYS } from "@/lib/whatsapp"
 import { PageHeader } from "@/components/page-header"
@@ -32,6 +33,7 @@ const vazio = {
   valor_taxas: "",
   valor_diaria: "",
   observacao: "",
+  responsavel: "",
   anexo_url: "",
   anexo_path: "",
 }
@@ -65,6 +67,7 @@ export function PagamentosMotoboys() {
     column: "created_at",
   })
   const { data: config } = useTable<Configuracao>("configuracoes")
+  const { data: colaboradores } = useTable<Colaborador>("colaboradores", { column: "nome" })
 
   const [filtro, setFiltro] = useState<Filtro>("todos")
   const [busca, setBusca] = useState("")
@@ -148,6 +151,7 @@ export function PagamentosMotoboys() {
       valor_taxas: String(p.valor_taxas ?? ""),
       valor_diaria: String(p.valor_diaria ?? ""),
       observacao: p.observacao ?? "",
+      responsavel: p.responsavel ?? "",
       anexo_url: p.anexo_url ?? "",
       anexo_path: p.anexo_path ?? "",
     })
@@ -191,6 +195,7 @@ export function PagamentosMotoboys() {
         valor_diaria: Number(form.valor_diaria) || 0,
         total,
         observacao: form.observacao || null,
+        responsavel: form.responsavel || null,
         anexo_url: form.anexo_url || null,
         anexo_path: form.anexo_path || null,
       }
@@ -218,13 +223,20 @@ export function PagamentosMotoboys() {
         )
         if (entregaError) throw entregaError
       }
+      if (!editId && result.data?.id) {
+        void fetch("/api/notifications/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tipo: "motoboy", id: result.data.id }),
+        }).catch(() => undefined)
+      }
       toast.success(editId ? "Pagamento atualizado." : "Pagamento adicionado.")
       setOpen(false)
       mutate()
       mutateEntregas()
     } catch (e) {
       console.log("[v0] erro salvar motoboy:", e)
-      toast.error("Erro ao salvar.")
+      toast.error(mensagemErroSupabase(e))
     } finally {
       setSaving(false)
     }
@@ -396,6 +408,24 @@ export function PagamentosMotoboys() {
                   )}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Responsável pelo pagamento</Label>
+              <Select
+                value={form.responsavel || "sem_responsavel"}
+                onValueChange={(nome) =>
+                  setForm({ ...form, responsavel: nome === "sem_responsavel" ? "" : nome ?? "" })
+                }
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione a pessoa" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sem_responsavel">Não definido</SelectItem>
+                  {colaboradores.filter((pessoa) => pessoa.ativo).map((pessoa) => (
+                    <SelectItem key={pessoa.id} value={pessoa.nome}>{pessoa.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Quem confere ou realiza este pagamento.</p>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="data">Data</Label>

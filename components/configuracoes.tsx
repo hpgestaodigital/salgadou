@@ -17,20 +17,20 @@ import { Separator } from "@/components/ui/separator"
 const CHAVES = [
   "evolution_url",
   "evolution_instance",
-  "evolution_apikey",
   "template_escala",
   "template_pagamento_fornecedor",
   "template_pagamento_motoboy",
   "dashboard_titulo",
   "dashboard_descricao",
   "brand_logo_url",
+  "notificacoes_ativas",
+  "notificacoes_antecedencia_dias",
 ] as const
 type Chave = (typeof CHAVES)[number]
 
 const defaults: Record<Chave, string> = {
   evolution_url: "",
   evolution_instance: "",
-  evolution_apikey: "",
   template_escala: "Olá {nome}! Lembrete da Salgadou: você tem escala nesta semana. Confira seus horários.",
   template_pagamento_fornecedor:
     "Olá! Salgadou aqui. Lembrete do pagamento do pedido {pedido} para {fornecedor} no valor de {valor}, com vencimento em {vencimento}.",
@@ -39,6 +39,8 @@ const defaults: Record<Chave, string> = {
   dashboard_titulo: "Painel Geral",
   dashboard_descricao: "Visão consolidada das finanças e operação da Salgadou.",
   brand_logo_url: "",
+  notificacoes_ativas: "false",
+  notificacoes_antecedencia_dias: "3",
 }
 
 const LEMBRETES: { chave: Chave; titulo: string; descricao: string; marcadores: string[] }[] = [
@@ -73,6 +75,7 @@ export function Configuracoes() {
   const [userId, setUserId] = useState("")
   const [uploading, setUploading] = useState<"logo" | "avatar" | null>(null)
   const [savingAvatar, setSavingAvatar] = useState(false)
+  const [evolutionConfigured, setEvolutionConfigured] = useState(false)
 
   useEffect(() => {
     let ativo = true
@@ -100,7 +103,14 @@ export function Configuracoes() {
     })
   }, [supabase])
 
-  const conectado = Boolean(values.evolution_url && values.evolution_instance && values.evolution_apikey)
+  useEffect(() => {
+    fetch("/api/notifications/status")
+      .then((res) => res.json())
+      .then((data) => setEvolutionConfigured(Boolean(data.configured)))
+      .catch(() => {})
+  }, [])
+
+  const conectado = evolutionConfigured
 
   async function salvar() {
     setSaving(true)
@@ -112,6 +122,8 @@ export function Configuracoes() {
       }))
       const { error } = await supabase.from("configuracoes").upsert(rows, { onConflict: "chave" })
       if (error) throw error
+      const status = await fetch("/api/notifications/status").then((res) => res.json()).catch(() => null)
+      if (status) setEvolutionConfigured(Boolean(status.configured))
       toast.success("Configurações salvas.")
       window.dispatchEvent(new Event("salgadou:branding-updated"))
     } catch (e) {
@@ -234,8 +246,7 @@ export function Configuracoes() {
               )}
             </div>
             <CardDescription>
-              Preencha os dados da sua instância. Os valores ficam salvos no banco e são usados pelo servidor para
-              enviar mensagens.
+              O endereço e a instância ficam no banco. A API Key permanece somente nos segredos do servidor.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -265,11 +276,11 @@ export function Configuracoes() {
                 <Input
                   id="key"
                   type="password"
-                  value={values.evolution_apikey}
-                  onChange={(e) => setValues({ ...values, evolution_apikey: e.target.value })}
-                  placeholder="••••••••"
-                  disabled={loading}
+                  value={conectado ? "configurada-no-servidor" : ""}
+                  placeholder="Defina EVOLUTION_API_KEY no servidor"
+                  disabled
                 />
+                <p className="text-xs text-muted-foreground">A chave nunca é salva no navegador ou no banco.</p>
               </div>
             </div>
           </CardContent>
@@ -299,12 +310,54 @@ export function Configuracoes() {
             </Button>
             <Separator />
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Salve as configurações antes de testar. O envio usa a rota segura do servidor, que lê as credenciais
-              salvas — sua API Key não é exposta no navegador.
+              Salve o endereço e a instância antes de testar. O envio usa uma rota segura e lê a API Key somente do
+              ambiente do servidor.
             </p>
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 font-heading">
+            <Bell className="size-5 text-primary" />
+            Notificações automáticas
+          </CardTitle>
+          <CardDescription>Novos lançamentos, pendências, vencimentos próximos e atrasos.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label>Ativação</Label>
+            <Button
+              type="button"
+              variant={values.notificacoes_ativas === "true" ? "default" : "outline"}
+              onClick={() =>
+                setValues({
+                  ...values,
+                  notificacoes_ativas: values.notificacoes_ativas === "true" ? "false" : "true",
+                })
+              }
+              disabled={!conectado}
+            >
+              {values.notificacoes_ativas === "true" ? "Notificações ativadas" : "Notificações desativadas"}
+            </Button>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="dias-antecedencia">Antecedência (dias)</Label>
+            <Input
+              id="dias-antecedencia"
+              type="number"
+              min="1"
+              max="30"
+              value={values.notificacoes_antecedencia_dias}
+              onChange={(e) => setValues({ ...values, notificacoes_antecedencia_dias: e.target.value })}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            O responsável recebe o aviso. Sem responsável, todos os Sócios ativos com WhatsApp recebem.
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
