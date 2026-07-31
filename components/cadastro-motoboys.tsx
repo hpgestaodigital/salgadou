@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Loader2, Pencil, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
+import { mensagemErroSupabase } from "@/lib/supabase/friendly-error"
 import { useTable } from "@/lib/use-data"
 import type { Motoboy } from "@/lib/types"
 import { formatBRL } from "@/lib/format"
@@ -69,7 +70,7 @@ export function CadastroMotoboys() {
       mutate()
     } catch (e) {
       console.log("[v0] erro salvar motoboy cadastro:", e)
-      toast.error("Erro ao salvar.")
+      toast.error(mensagemErroSupabase(e))
     } finally {
       setSaving(false)
     }

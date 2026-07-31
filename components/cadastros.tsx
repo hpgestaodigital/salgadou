@@ -9,14 +9,17 @@ import { CadastroFornecedores } from "@/components/cadastro-fornecedores"
 export function Cadastros() {
   return (
     <div>
-      <PageHeader title="Cadastros" description="Gerencie colaboradores, motoboys e fornecedores." />
-
-      <Tabs defaultValue="colaboradores">
-        <TabsList>
+      <PageHeader title="Cadastros" description="Gerencie sócios, colaboradores, motoboys e fornecedores." />
+      <Tabs defaultValue="socios">
+        <TabsList className="h-auto flex-wrap justify-start">
+          <TabsTrigger value="socios">Sócios</TabsTrigger>
           <TabsTrigger value="colaboradores">Colaboradores</TabsTrigger>
           <TabsTrigger value="motoboys">Motoboys</TabsTrigger>
           <TabsTrigger value="fornecedores">Fornecedores</TabsTrigger>
         </TabsList>
+        <TabsContent value="socios" className="mt-4">
+          <CadastroColaboradores contexto="socios" />
+        </TabsContent>
         <TabsContent value="colaboradores" className="mt-4">
           <CadastroColaboradores />
         </TabsContent>

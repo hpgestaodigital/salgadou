@@ -1,11 +1,11 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Bike, CheckCircle2, Loader2, Pencil, Plus, RotateCcw, Search, Send, Wallet, Package } from "lucide-react"
+import { Bike, CheckCircle2, Loader2, Pencil, Plus, RotateCcw, Search, Send, Trash2, Wallet, Package } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { useTable } from "@/lib/use-data"
-import type { Configuracao, Motoboy, PagamentoMotoboy } from "@/lib/types"
+import type { Configuracao, EntregaMotoboy, Motoboy, PagamentoMotoboy } from "@/lib/types"
 import { formatBRL, formatDate, todayISO } from "@/lib/format"
 import { enviarWhatsapp, preencherTemplate, TEMPLATE_KEYS } from "@/lib/whatsapp"
 import { PageHeader } from "@/components/page-header"
@@ -33,6 +33,24 @@ const vazio = {
   observacao: "",
 }
 
+type EntregaDraft = {
+  id: string
+  identificador: string
+  numero_entrega: string
+  bairro: string
+  valor_recebido: string
+  comissao: string
+}
+
+const novaEntrega = (): EntregaDraft => ({
+  id: crypto.randomUUID(),
+  identificador: "",
+  numero_entrega: "",
+  bairro: "",
+  valor_recebido: "",
+  comissao: "",
+})
+
 export function PagamentosMotoboys() {
   const supabase = createClient()
   const { data, isLoading, mutate } = useTable<PagamentoMotoboy>("pagamentos_motoboys", {
@@ -40,6 +58,9 @@ export function PagamentosMotoboys() {
     ascending: false,
   })
   const { data: motoboys } = useTable<Motoboy>("motoboys", { column: "nome" })
+  const { data: entregas, mutate: mutateEntregas } = useTable<EntregaMotoboy>("entregas_motoboy", {
+    column: "created_at",
+  })
   const { data: config } = useTable<Configuracao>("configuracoes")
 
   const [filtro, setFiltro] = useState<Filtro>("todos")
@@ -47,6 +68,7 @@ export function PagamentosMotoboys() {
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<typeof vazio>(vazio)
+  const [entregasForm, setEntregasForm] = useState<EntregaDraft[]>([])
   const [saving, setSaving] = useState(false)
   const [enviandoId, setEnviandoId] = useState<string | null>(null)
 
@@ -110,6 +132,7 @@ export function PagamentosMotoboys() {
   function abrirNovo() {
     setEditId(null)
     setForm(vazio)
+    setEntregasForm([])
     setOpen(true)
   }
 
@@ -123,6 +146,16 @@ export function PagamentosMotoboys() {
       valor_diaria: String(p.valor_diaria ?? ""),
       observacao: p.observacao ?? "",
     })
+    setEntregasForm(
+      entregas.filter((entrega) => entrega.pagamento_id === p.id).map((entrega) => ({
+        id: entrega.id,
+        identificador: entrega.identificador ?? "",
+        numero_entrega: entrega.numero_entrega ?? "",
+        bairro: entrega.bairro ?? "",
+        valor_recebido: String(entrega.valor_recebido ?? ""),
+        comissao: String(entrega.comissao ?? ""),
+      })),
+    )
     setOpen(true)
   }
 
@@ -154,13 +187,34 @@ export function PagamentosMotoboys() {
         total,
         observacao: form.observacao || null,
       }
-      const { error } = editId
-        ? await supabase.from("pagamentos_motoboys").update(payload).eq("id", editId)
-        : await supabase.from("pagamentos_motoboys").insert(payload)
+      const result = editId
+        ? await supabase.from("pagamentos_motoboys").update(payload).eq("id", editId).select("id").single()
+        : await supabase.from("pagamentos_motoboys").insert(payload).select("id").single()
+      const { error } = result
       if (error) throw error
+      const pagamentoId = result.data.id as string
+      const { error: deleteError } = await supabase.from("entregas_motoboy").delete().eq("pagamento_id", pagamentoId)
+      if (deleteError) throw deleteError
+      const detalhesPreenchidos = entregasForm.filter((entrega) =>
+        entrega.identificador || entrega.numero_entrega || entrega.bairro || entrega.valor_recebido || entrega.comissao,
+      )
+      if (detalhesPreenchidos.length) {
+        const { error: entregaError } = await supabase.from("entregas_motoboy").insert(
+          detalhesPreenchidos.map((entrega) => ({
+            pagamento_id: pagamentoId,
+            identificador: entrega.identificador || null,
+            numero_entrega: entrega.numero_entrega || null,
+            bairro: entrega.bairro || null,
+            valor_recebido: entrega.valor_recebido ? Number(entrega.valor_recebido) : null,
+            comissao: entrega.comissao ? Number(entrega.comissao) : null,
+          })),
+        )
+        if (entregaError) throw entregaError
+      }
       toast.success(editId ? "Pagamento atualizado." : "Pagamento adicionado.")
       setOpen(false)
       mutate()
+      mutateEntregas()
     } catch (e) {
       console.log("[v0] erro salvar motoboy:", e)
       toast.error("Erro ao salvar.")
@@ -267,6 +321,11 @@ export function PagamentosMotoboys() {
                           PIX: {p.pix}
                         </span>
                       )}
+                      {entregas.some((entrega) => entrega.pagamento_id === p.id) && (
+                        <span className="block text-xs font-normal text-muted-foreground">
+                          {entregas.filter((entrega) => entrega.pagamento_id === p.id).length} entrega(s) detalhada(s)
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-center">{p.numero_entregas ?? 0}</TableCell>
                     <TableCell className="text-right">{formatBRL(p.valor_taxas)}</TableCell>
@@ -305,14 +364,14 @@ export function PagamentosMotoboys() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editId ? "Editar pagamento" : "Novo pagamento de motoboy"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5 sm:col-span-2">
               <Label>Motoboy</Label>
-              <Select value={form.motoboy_id} onValueChange={selecionarMotoboy}>
+              <Select value={form.motoboy_id} onValueChange={(id) => id && selecionarMotoboy(id)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o motoboy" />
                 </SelectTrigger>
@@ -371,6 +430,68 @@ export function PagamentosMotoboys() {
                 onChange={(e) => setForm({ ...form, valor_diaria: e.target.value })}
                 placeholder="0,00"
               />
+            </div>
+            <div className="grid gap-3 sm:col-span-2 rounded-lg border p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label>Detalhes opcionais por entrega</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Preencha somente os campos necessários. Nenhum detalhe é obrigatório.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => setEntregasForm([...entregasForm, novaEntrega()])}>
+                  <Plus className="size-4" />Adicionar entrega
+                </Button>
+              </div>
+              {entregasForm.map((entrega, index) => (
+                <div key={entrega.id} className="grid gap-2 rounded-md bg-muted/50 p-3 sm:grid-cols-6">
+                  <Input
+                    aria-label={`Identificador da entrega ${index + 1}`}
+                    placeholder="#"
+                    value={entrega.identificador}
+                    onChange={(e) => setEntregasForm(entregasForm.map((item) => item.id === entrega.id ? { ...item, identificador: e.target.value } : item))}
+                  />
+                  <Input
+                    aria-label={`Número da entrega ${index + 1}`}
+                    placeholder="Nº entrega"
+                    value={entrega.numero_entrega}
+                    onChange={(e) => setEntregasForm(entregasForm.map((item) => item.id === entrega.id ? { ...item, numero_entrega: e.target.value } : item))}
+                  />
+                  <Input
+                    aria-label={`Bairro da entrega ${index + 1}`}
+                    placeholder="Bairro"
+                    value={entrega.bairro}
+                    onChange={(e) => setEntregasForm(entregasForm.map((item) => item.id === entrega.id ? { ...item, bairro: e.target.value } : item))}
+                  />
+                  <Input
+                    aria-label={`Valor recebido da entrega ${index + 1}`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Recebido R$"
+                    value={entrega.valor_recebido}
+                    onChange={(e) => setEntregasForm(entregasForm.map((item) => item.id === entrega.id ? { ...item, valor_recebido: e.target.value } : item))}
+                  />
+                  <Input
+                    aria-label={`Comissão da entrega ${index + 1}`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Comissão R$"
+                    value={entrega.comissao}
+                    onChange={(e) => setEntregasForm(entregasForm.map((item) => item.id === entrega.id ? { ...item, comissao: e.target.value } : item))}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setEntregasForm(entregasForm.filter((item) => item.id !== entrega.id))}
+                    aria-label={`Remover entrega ${index + 1}`}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
             <div className="grid gap-1.5 sm:col-span-2">
               <Label htmlFor="obsm">Observação</Label>

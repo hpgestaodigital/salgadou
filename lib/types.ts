@@ -4,9 +4,31 @@ export type Colaborador = {
   whatsapp: string | null
   tipo: string | null
   valor_diaria: number | null
+  modalidade_pagamento?: "pro_labore" | "diaria" | "contrato" | null
+  periodicidade_pagamento?: "por_dia" | "por_servico" | "semanal" | "quinzenal" | "mensal" | null
+  valor_pagamento?: number | null
+  observacoes_contrato?: string | null
   funcao: string | null
   ativo: boolean
   created_at: string
+}
+
+export const TIPOS_COLABORADOR = [
+  "Diarista / Freelancer",
+  "Prestador de serviço · Por serviço",
+  "Prestador de serviço · Semanal",
+  "Prestador de serviço · Quinzenal",
+  "Prestador de serviço · Mensal",
+] as const
+
+export function isSocio(colaborador: Colaborador) {
+  return colaborador.tipo === "Sócio"
+}
+
+export function labelValorColaborador(tipo: string | null) {
+  if (tipo === "Sócio") return "Pró-labore"
+  if (tipo?.startsWith("Diarista")) return "Valor da diária"
+  return "Pagamento fixo"
 }
 
 export type Motoboy = {
@@ -69,6 +91,17 @@ export type PagamentoMotoboy = {
   pago_em: string | null
   observacao: string | null
   created_at: string
+}
+
+export type EntregaMotoboy = {
+  id: string
+  pagamento_id: string
+  identificador?: string
+  numero_entrega?: string
+  bairro?: string
+  valor_recebido?: number | null
+  comissao?: number | null
+  created_at?: string
 }
 
 export type Configuracao = {

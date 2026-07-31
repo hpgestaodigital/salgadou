@@ -37,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="pt-BR" className={`bg-background ${nunito.variable} ${nunitoSans.variable}`}>
+    <html lang="pt-BR" className={`dark bg-background ${nunito.variable} ${nunitoSans.variable}`}>
       <body className="antialiased font-body">
         <AppShell>{children}</AppShell>
         <Toaster richColors position="top-right" />

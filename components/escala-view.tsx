@@ -17,6 +17,41 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 type Draft = Record<string, Partial<Escala>>
 
+function calcularMinutos(valor: string) {
+  const texto = valor.trim()
+  if (!texto || /^(folga|off|—|-)$/i.test(texto)) return { minutos: 0, invalidos: 0 }
+
+  const intervalos = [...texto.matchAll(/(\d{1,2}):(\d{2})\s*[-–—]\s*(\d{1,2}):(\d{2})/g)]
+  if (intervalos.length === 0) return { minutos: 0, invalidos: 1 }
+
+  return intervalos.reduce(
+    (total, intervalo) => {
+      const inicioHora = Number(intervalo[1])
+      const inicioMinuto = Number(intervalo[2])
+      const fimHora = Number(intervalo[3])
+      const fimMinuto = Number(intervalo[4])
+      const horarioValido =
+        inicioHora <= 23 && fimHora <= 23 && inicioMinuto <= 59 && fimMinuto <= 59
+      const inicio = inicioHora * 60 + inicioMinuto
+      const fim = fimHora * 60 + fimMinuto
+
+      if (!horarioValido || fim <= inicio) {
+        total.invalidos += 1
+      } else {
+        total.minutos += fim - inicio
+      }
+      return total
+    },
+    { minutos: 0, invalidos: 0 },
+  )
+}
+
+function formatarTotalSemanal(minutos: number) {
+  const horas = Math.floor(minutos / 60)
+  const resto = minutos % 60
+  return `${horas} h${resto ? ` ${resto} min` : ""} na semana`
+}
+
 export function EscalaView() {
   const supabase = createClient()
   const [semana, setSemana] = useState<string>(() => mondayOf(todayISO()))
@@ -74,6 +109,18 @@ export function EscalaView() {
 
   const temAlteracoes = Object.keys(draft).length > 0
 
+  function totalDaSemana(colaboradorId: string) {
+    return DIAS.reduce(
+      (total, dia) => {
+        const calculado = calcularMinutos(getValue(colaboradorId, dia.key))
+        total.minutos += calculado.minutos
+        total.invalidos += calculado.invalidos
+        return total
+      },
+      { minutos: 0, invalidos: 0 },
+    )
+  }
+
   async function salvar() {
     setSaving(true)
     try {
@@ -121,7 +168,7 @@ export function EscalaView() {
     <div>
       <PageHeader
         title="Escala Semanal"
-        description="Preencha os turnos de cada colaborador. Use livre: manhã, tarde, folga, horário, etc."
+        description="Defina intervalos precisos e até dois turnos por dia, por exemplo: 08:00–13:00 / 18:00–22:00."
         action={
           <>
             <Button variant="outline" onClick={enviarLembretes} disabled={enviando || ativos.length === 0}>
@@ -161,30 +208,33 @@ export function EscalaView() {
               <TableRow className="bg-muted/50">
                 <TableHead className="min-w-44 sticky left-0 bg-muted/50 z-10">Colaborador</TableHead>
                 {DIAS.map((d, i) => (
-                  <TableHead key={d.key} className="min-w-28 text-center">
+                  <TableHead key={d.key} className="min-w-52 text-center">
                     <span className="block font-bold">{d.label}</span>
                     <span className="block text-[11px] font-normal text-muted-foreground">
                       {formatDate(addDaysISO(semana, i)).slice(0, 5)}
                     </span>
                   </TableHead>
                 ))}
+                <TableHead className="min-w-40 text-right">Total semanal</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                     Carregando...
                   </TableCell>
                 </TableRow>
               ) : ativos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                     Nenhum colaborador ativo. Cadastre em &quot;Cadastros&quot;.
                   </TableCell>
                 </TableRow>
               ) : (
-                ativos.map((c) => (
+                ativos.map((c) => {
+                  const total = totalDaSemana(c.id)
+                  return (
                   <TableRow key={c.id}>
                     <TableCell className="sticky left-0 bg-card z-10 font-semibold">
                       <span className="block truncate max-w-40">{c.nome}</span>
@@ -195,13 +245,25 @@ export function EscalaView() {
                         <Input
                           value={getValue(c.id, d.key)}
                           onChange={(e) => setValue(c.id, d.key, e.target.value)}
-                          placeholder="—"
-                          className="h-9 text-center text-sm"
+                          placeholder="08:00–13:00 / 18:00–22:00"
+                          className="h-9 text-center text-xs"
+                          aria-label={`${c.nome}, ${d.label}: intervalos de horário`}
                         />
                       </TableCell>
                     ))}
+                    <TableCell className="text-right">
+                      <span className="block whitespace-nowrap font-heading font-bold text-primary">
+                        {formatarTotalSemanal(total.minutos)}
+                      </span>
+                      {total.invalidos > 0 && (
+                        <span className="mt-1 block text-xs text-destructive">
+                          {total.invalidos} intervalo(s) inválido(s) ignorado(s)
+                        </span>
+                      )}
+                    </TableCell>
                   </TableRow>
-                ))
+                  )
+                })
               )}
             </TableBody>
           </Table>
