@@ -29,7 +29,12 @@ export const saveSettings = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const payload: Record<string, unknown> = {
+    const payload: {
+      evolution_url: string | null;
+      evolution_instance: string | null;
+      test_phone: string | null;
+      evolution_api_key?: string;
+    } = {
       evolution_url: data.evolution_url.trim() || null,
       evolution_instance: data.evolution_instance.trim() || null,
       test_phone: data.test_phone.trim() || null,
