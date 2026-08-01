@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { CheckCircle2, KeyRound, Loader2, UtensilsCrossed } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,11 +22,11 @@ export default function UpdatePasswordPage() {
   useEffect(() => {
     let ativo = true
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
       if (ativo && data.session) setSessaoPronta(true)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((evento, sessao) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((evento: AuthChangeEvent, sessao: Session | null) => {
       if (ativo && (evento === "PASSWORD_RECOVERY" || sessao)) setSessaoPronta(true)
     })
 
