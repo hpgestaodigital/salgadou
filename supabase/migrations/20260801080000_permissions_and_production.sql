@@ -75,6 +75,7 @@ as $$
 $$;
 
 revoke all on function private.usuario_pode_acessar(text) from public, anon;
+grant usage on schema private to authenticated, service_role;
 grant execute on function private.usuario_pode_acessar(text) to authenticated, service_role;
 
 alter table public.perfis_permissoes enable row level security;
@@ -228,3 +229,95 @@ grant select, insert, update, delete on public.perfis_permissoes,
   public.producao_receitas, public.producao_planejamento,
   public.producao_lista_compras to authenticated, service_role;
 grant select on public.producao_necessidades to authenticated, service_role;
+
+
+-- As permissões configuradas também protegem as tabelas existentes.
+do $$
+declare
+  item record;
+  politica record;
+begin
+  for item in
+    select * from (values
+      ('colaboradores', '(private.usuario_pode_acessar(''cadastros'') or private.usuario_pode_acessar(''juridico''))'),
+      ('motoboys', 'private.usuario_pode_acessar(''cadastros'')'),
+      ('fornecedores', 'private.usuario_pode_acessar(''cadastros'')'),
+      ('escala', 'private.usuario_pode_acessar(''escala'')'),
+      ('kanban_tarefas', 'private.usuario_pode_acessar(''kanban'')'),
+      ('reunioes', 'private.usuario_pode_acessar(''reunioes'')'),
+      ('reunioes_itens', 'private.usuario_pode_acessar(''reunioes'')'),
+      ('pagamentos_fornecedores', 'private.usuario_pode_acessar(''pagamentos_fornecedores'')'),
+      ('pagamentos_motoboys', 'private.usuario_pode_acessar(''pagamentos_motoboys'')'),
+      ('entregas_motoboy', 'private.usuario_pode_acessar(''pagamentos_motoboys'')'),
+      ('configuracoes', 'private.usuario_pode_acessar(''configuracoes'')'),
+      ('contratos', 'private.usuario_pode_acessar(''juridico'')'),
+      ('contrato_validacoes', 'private.usuario_pode_acessar(''juridico'')'),
+      ('contrato_signatarios', 'private.usuario_pode_acessar(''juridico'')'),
+      ('contrato_lembretes', 'private.usuario_pode_acessar(''juridico'')'),
+      ('documentos_juridicos', 'private.usuario_pode_acessar(''juridico'')'),
+      ('demandas_juridicas', 'private.usuario_pode_acessar(''juridico'')')
+    ) as x(tabela, expressao)
+  loop
+    if to_regclass('public.' || item.tabela) is not null then
+      for politica in
+        select policyname from pg_policies
+        where schemaname = 'public' and tablename = item.tabela
+      loop
+        execute format('drop policy if exists %I on public.%I', politica.policyname, item.tabela);
+      end loop;
+      execute format(
+        'create policy %I on public.%I for all to authenticated using (%s) with check (%s)',
+        'Acesso configurado a ' || item.tabela, item.tabela, item.expressao, item.expressao
+      );
+    end if;
+  end loop;
+end $$;
+
+-- O mesmo bloqueio vale para anexos financeiros e jurídicos.
+drop policy if exists "Papéis do Salgadou leem anexos de pagamentos" on storage.objects;
+create policy "Acesso configurado le anexos de pagamentos" on storage.objects
+  for select to authenticated using (
+    bucket_id = 'erp-payment-attachments'
+    and private.usuario_pode_acessar('pagamentos_fornecedores')
+  );
+
+drop policy if exists "Papéis do Salgadou atualizam anexos de pagamentos" on storage.objects;
+create policy "Acesso configurado atualiza anexos de pagamentos" on storage.objects
+  for update to authenticated using (
+    bucket_id = 'erp-payment-attachments'
+    and private.usuario_pode_acessar('pagamentos_fornecedores')
+  ) with check (
+    bucket_id = 'erp-payment-attachments'
+    and private.usuario_pode_acessar('pagamentos_fornecedores')
+  );
+
+drop policy if exists "Papéis do Salgadou removem anexos de pagamentos" on storage.objects;
+create policy "Acesso configurado remove anexos de pagamentos" on storage.objects
+  for delete to authenticated using (
+    bucket_id = 'erp-payment-attachments'
+    and private.usuario_pode_acessar('pagamentos_fornecedores')
+  );
+
+drop policy if exists "Setor juridico le contratos" on storage.objects;
+create policy "Acesso configurado le contratos" on storage.objects for select to authenticated using (
+  bucket_id = 'erp-legal-contracts' and private.usuario_pode_acessar('juridico')
+);
+
+drop policy if exists "Setor juridico envia contratos" on storage.objects;
+create policy "Acesso configurado envia contratos" on storage.objects for insert to authenticated with check (
+  bucket_id = 'erp-legal-contracts'
+  and (storage.foldername(name))[2] = (select auth.uid())::text
+  and private.usuario_pode_acessar('juridico')
+);
+
+drop policy if exists "Setor juridico atualiza contratos" on storage.objects;
+create policy "Acesso configurado atualiza contratos" on storage.objects for update to authenticated using (
+  bucket_id = 'erp-legal-contracts' and private.usuario_pode_acessar('juridico')
+) with check (
+  bucket_id = 'erp-legal-contracts' and private.usuario_pode_acessar('juridico')
+);
+
+drop policy if exists "Setor juridico remove contratos" on storage.objects;
+create policy "Acesso configurado remove contratos" on storage.objects for delete to authenticated using (
+  bucket_id = 'erp-legal-contracts' and private.usuario_pode_acessar('juridico')
+);
