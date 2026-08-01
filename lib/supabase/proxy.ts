@@ -1,8 +1,30 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
-// Rotas que podem ser acessadas sem sessão.
 const ROTAS_PUBLICAS = ["/auth", "/api/auth"]
+
+const ROTAS_MODULOS = [
+  { prefixo: "/escala", modulo: "escala" },
+  { prefixo: "/kanban", modulo: "kanban" },
+  { prefixo: "/reunioes", modulo: "reunioes" },
+  { prefixo: "/juridico", modulo: "juridico" },
+  { prefixo: "/historico", modulo: "historico" },
+  { prefixo: "/pagamentos-fornecedores", modulo: "pagamentos_fornecedores" },
+  { prefixo: "/pagamentos-motoboys", modulo: "pagamentos_motoboys" },
+  { prefixo: "/cadastros", modulo: "cadastros" },
+  { prefixo: "/usuarios", modulo: "usuarios" },
+  { prefixo: "/configuracoes", modulo: "configuracoes" },
+] as const
+
+const DESTINOS = [
+  ["dashboard", "/"], ["escala", "/escala"], ["kanban", "/kanban"],
+  ["reunioes", "/reunioes"], ["producao_planejamento", "/producao"],
+  ["producao_estoque", "/producao?tab=estoque"], ["producao_compras", "/producao?tab=compras"],
+  ["juridico", "/juridico"], ["historico", "/historico"],
+  ["pagamentos_fornecedores", "/pagamentos-fornecedores"],
+  ["pagamentos_motoboys", "/pagamentos-motoboys"], ["cadastros", "/cadastros"],
+  ["usuarios", "/usuarios"], ["configuracoes", "/configuracoes"],
+] as const
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -27,26 +49,60 @@ export async function updateSession(request: NextRequest) {
     },
   )
 
-  // Não coloque código entre createServerClient e getUser().
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
   const rotaPublica = ROTAS_PUBLICAS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
 
-  // Sem sessão e tentando acessar rota protegida -> vai para o login.
   if (!user && !rotaPublica) {
     const url = request.nextUrl.clone()
     url.pathname = "/auth/login"
     return NextResponse.redirect(url)
   }
 
-  // Já logado e indo para o login -> manda para o dashboard.
   if (user && pathname === "/auth/login") {
     const url = request.nextUrl.clone()
     url.pathname = "/"
     return NextResponse.redirect(url)
+  }
+
+  if (user && !rotaPublica && !pathname.startsWith("/api/")) {
+    const papel = String(user.app_metadata?.role || "colaborador")
+    const [{ data: padrao, error: padraoError }, { data: individuais, error: individuaisError }] =
+      await Promise.all([
+        supabase.from("perfis_permissoes").select("modulo, pode_visualizar").eq("papel", papel),
+        supabase.from("usuarios_permissoes").select("modulo, pode_visualizar").eq("usuario_id", user.id),
+      ])
+
+    const permissoes: Record<string, boolean> = {}
+    if (!padraoError && !individuaisError) {
+      for (const item of padrao ?? []) permissoes[item.modulo] = item.pode_visualizar
+      for (const item of individuais ?? []) permissoes[item.modulo] = item.pode_visualizar
+    } else {
+      const todos = papel === "admin" || papel === "socio"
+      for (const [modulo] of DESTINOS) permissoes[modulo] = todos
+      if (papel === "juridico") permissoes.juridico = true
+      if (papel === "colaborador") {
+        for (const modulo of ["dashboard", "escala", "kanban", "reunioes"]) permissoes[modulo] = true
+      }
+    }
+
+    let moduloAtual: string | null = pathname === "/" ? "dashboard" : null
+    if (pathname.startsWith("/producao")) {
+      moduloAtual = ["producao_compras", "producao_estoque", "producao_planejamento"]
+        .some((modulo) => permissoes[modulo]) ? "producao" : "producao_bloqueada"
+    } else {
+      moduloAtual = ROTAS_MODULOS.find((item) => pathname.startsWith(item.prefixo))?.modulo ?? moduloAtual
+    }
+
+    const permitido = moduloAtual === "producao" || (moduloAtual ? Boolean(permissoes[moduloAtual]) : true)
+    if (!permitido) {
+      const destino = DESTINOS.find(([modulo]) => permissoes[modulo])?.[1] || "/auth/sem-acesso"
+      const url = request.nextUrl.clone()
+      const [novoPath, query] = destino.split("?")
+      url.pathname = novoPath
+      url.search = query ? `?${query}` : ""
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse
