@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Package, Plus, ShoppingCart } from "lucide-react"
+import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Package, Plus, ShoppingCart, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { carregarPermissoes, type Permissoes } from "@/lib/access-control"
@@ -28,6 +28,7 @@ export function ProducaoView() {
   const [permissoes, setPermissoes] = useState<Permissoes>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [gerandoExemplo, setGerandoExemplo] = useState(false)
   const [insumos, setInsumos] = useState<Insumo[]>([])
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [receitas, setReceitas] = useState<Receita[]>([])
@@ -177,6 +178,71 @@ export function ProducaoView() {
     )
   }
 
+  async function gerarExemploProducao() {
+    setGerandoExemplo(true)
+    const idsInsumos = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()]
+    const produtoId = crypto.randomUUID()
+    const planoIds = [crypto.randomUUID(), crypto.randomUUID()]
+    let criouDados = false
+    try {
+      const { data: existentes, error: consultaError } = await supabase.from("producao_produtos").select("id").ilike("nome", "[EXEMPLO]%").limit(1)
+      if (consultaError) throw consultaError
+      if (existentes?.length) {
+        toast.warning("Os exemplos da Produção já foram criados.")
+        return
+      }
+      const dataEm = (dias: number) => {
+        const data = new Date()
+        data.setDate(data.getDate() + dias)
+        return data.toISOString().slice(0, 10)
+      }
+      const dataProducao = dataEm(2)
+      const segundaData = dataEm(5)
+      const { error: insumosError } = await supabase.from("producao_insumos").insert([
+        { id: idsInsumos[0], nome: "[EXEMPLO] Massa de mandioca", unidade: "kg", estoque_atual: 2, estoque_minimo: 5 },
+        { id: idsInsumos[1], nome: "[EXEMPLO] Queijo", unidade: "kg", estoque_atual: 1, estoque_minimo: 2 },
+        { id: idsInsumos[2], nome: "[EXEMPLO] Embalagem", unidade: "un", estoque_atual: 20, estoque_minimo: 100 },
+      ])
+      if (insumosError) throw insumosError
+      criouDados = true
+      const { error: produtoError } = await supabase.from("producao_produtos").insert({
+        id: produtoId, nome: "[EXEMPLO] Salgado de mandioca com queijo", unidade: "un",
+      })
+      if (produtoError) throw produtoError
+      const { error: receitasError } = await supabase.from("producao_receitas").insert([
+        { produto_id: produtoId, insumo_id: idsInsumos[0], quantidade_por_unidade: 0.05 },
+        { produto_id: produtoId, insumo_id: idsInsumos[1], quantidade_por_unidade: 0.02 },
+        { produto_id: produtoId, insumo_id: idsInsumos[2], quantidade_por_unidade: 1 },
+      ])
+      if (receitasError) throw receitasError
+      const { error: planosError } = await supabase.from("producao_planejamento").insert([
+        { id: planoIds[0], data_producao: dataProducao, produto_id: produtoId, quantidade: 100, observacoes: "[EXEMPLO] Produção para demonstrar o cálculo automático dos insumos." },
+        { id: planoIds[1], data_producao: segundaData, produto_id: produtoId, quantidade: 50, observacoes: "[EXEMPLO] Segundo lote exibido no calendário mensal." },
+      ])
+      if (planosError) throw planosError
+      const { error: compraError } = await supabase.from("producao_lista_compras").insert({
+        insumo_id: idsInsumos[0], data_necessidade: dataProducao, quantidade_necessaria: 3,
+        observacoes: "[EXEMPLO] Item gerado para demonstrar a lista de compras.",
+      })
+      if (compraError) throw compraError
+      await carregar()
+      setMesCalendario(new Date(dataProducao + "T12:00:00"))
+      setDiaSelecionado(dataProducao)
+      toast.success("Exemplo completo criado. Confira compras, estoque e calendário.")
+    } catch (e) {
+      if (criouDados) {
+        await supabase.from("producao_lista_compras").delete().eq("insumo_id", idsInsumos[0])
+        await supabase.from("producao_planejamento").delete().in("id", planoIds)
+        await supabase.from("producao_receitas").delete().eq("produto_id", produtoId)
+        await supabase.from("producao_produtos").delete().eq("id", produtoId)
+        await supabase.from("producao_insumos").delete().in("id", idsInsumos)
+      }
+      toast.error(e instanceof Error ? e.message : "Não foi possível criar os exemplos da Produção.")
+    } finally {
+      setGerandoExemplo(false)
+    }
+  }
+
   async function enviarParaCompras(item: Necessidade) {
     if (item.quantidade_a_comprar <= 0) return
     await executar(
@@ -195,6 +261,19 @@ export function ProducaoView() {
   return (
     <div>
       <PageHeader title="Produção" description="Planeje o que será produzido, confira os insumos e organize as compras." />
+
+      <Card className="mb-5 border-primary/30 bg-primary/5">
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
+          <div>
+            <p className="font-semibold">Quer ver o fluxo completo funcionando?</p>
+            <p className="text-sm text-muted-foreground">Crie dados fictícios de produto, receita, estoque, planejamento, necessidades e compras.</p>
+          </div>
+          <Button onClick={gerarExemploProducao} disabled={gerandoExemplo || saving}>
+            {gerandoExemplo ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+            {gerandoExemplo ? "Criando exemplo..." : "Mostrar exemplo completo"}
+          </Button>
+        </CardContent>
+      </Card>
       <Tabs key={abaInicial} defaultValue={abaInicial}>
         <TabsList className="h-auto flex-wrap justify-start">
           {permissoes.producao_compras && <TabsTrigger value="compras"><ShoppingCart className="size-4" />Lista de compras</TabsTrigger>}
