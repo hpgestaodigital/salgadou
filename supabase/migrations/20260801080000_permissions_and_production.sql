@@ -249,7 +249,6 @@ begin
       ('pagamentos_fornecedores', 'private.usuario_pode_acessar(''pagamentos_fornecedores'')'),
       ('pagamentos_motoboys', 'private.usuario_pode_acessar(''pagamentos_motoboys'')'),
       ('entregas_motoboy', 'private.usuario_pode_acessar(''pagamentos_motoboys'')'),
-      ('configuracoes', 'private.usuario_pode_acessar(''configuracoes'')'),
       ('contratos', 'private.usuario_pode_acessar(''juridico'')'),
       ('contrato_validacoes', 'private.usuario_pode_acessar(''juridico'')'),
       ('contrato_signatarios', 'private.usuario_pode_acessar(''juridico'')'),
@@ -321,3 +320,101 @@ drop policy if exists "Setor juridico remove contratos" on storage.objects;
 create policy "Acesso configurado remove contratos" on storage.objects for delete to authenticated using (
   bucket_id = 'erp-legal-contracts' and private.usuario_pode_acessar('juridico')
 );
+
+
+-- Configurações gerais seguem o módulo; a marca é exclusiva de administradores e sócios.
+do $$
+declare politica record;
+begin
+  for politica in
+    select policyname from pg_policies
+    where schemaname = 'public' and tablename = 'configuracoes'
+  loop
+    execute format('drop policy if exists %I on public.configuracoes', politica.policyname);
+  end loop;
+end $$;
+
+create policy "Leitura segura de configuracoes"
+  on public.configuracoes for select to authenticated
+  using (
+    private.usuario_pode_acessar('configuracoes')
+    or chave in ('brand_logo_url', 'dashboard_titulo', 'dashboard_descricao')
+  );
+
+create policy "Insercao segura de configuracoes"
+  on public.configuracoes for insert to authenticated
+  with check (
+    case
+      when chave = 'brand_logo_url'
+        then coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') in ('admin','socio')
+      else private.usuario_pode_acessar('configuracoes')
+    end
+  );
+
+create policy "Atualizacao segura de configuracoes"
+  on public.configuracoes for update to authenticated
+  using (
+    case
+      when chave = 'brand_logo_url'
+        then coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') in ('admin','socio')
+      else private.usuario_pode_acessar('configuracoes')
+    end
+  )
+  with check (
+    case
+      when chave = 'brand_logo_url'
+        then coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') in ('admin','socio')
+      else private.usuario_pode_acessar('configuracoes')
+    end
+  );
+
+create policy "Exclusao segura de configuracoes"
+  on public.configuracoes for delete to authenticated
+  using (
+    case
+      when chave = 'brand_logo_url'
+        then coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') in ('admin','socio')
+      else private.usuario_pode_acessar('configuracoes')
+    end
+  );
+
+-- O Storage devolve metadados após o upload; por isso INSERT precisa de SELECT compatível.
+drop policy if exists "Administrador envia branding" on storage.objects;
+drop policy if exists "Administrador atualiza branding" on storage.objects;
+drop policy if exists "Administrador remove branding" on storage.objects;
+drop policy if exists "Socios leem branding" on storage.objects;
+drop policy if exists "Socios enviam branding" on storage.objects;
+drop policy if exists "Socios atualizam branding" on storage.objects;
+drop policy if exists "Socios removem branding" on storage.objects;
+
+create policy "Socios leem branding" on storage.objects
+  for select to authenticated using (
+    bucket_id = 'erp-media'
+    and (storage.foldername(name))[1] = 'branding'
+    and coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') in ('admin','socio')
+  );
+
+create policy "Socios enviam branding" on storage.objects
+  for insert to authenticated with check (
+    bucket_id = 'erp-media'
+    and (storage.foldername(name))[1] = 'branding'
+    and coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') in ('admin','socio')
+  );
+
+create policy "Socios atualizam branding" on storage.objects
+  for update to authenticated using (
+    bucket_id = 'erp-media'
+    and (storage.foldername(name))[1] = 'branding'
+    and coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') in ('admin','socio')
+  ) with check (
+    bucket_id = 'erp-media'
+    and (storage.foldername(name))[1] = 'branding'
+    and coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') in ('admin','socio')
+  );
+
+create policy "Socios removem branding" on storage.objects
+  for delete to authenticated using (
+    bucket_id = 'erp-media'
+    and (storage.foldername(name))[1] = 'branding'
+    and coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') in ('admin','socio')
+  );
