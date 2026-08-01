@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     const [{ data: usuario, error: usuarioError }, { data: padrao, error: padraoError }, { data: individuais, error: individuaisError }] =
       await Promise.all([
         admin.auth.admin.getUserById(usuarioId),
-        admin.from("perfis_permissoes").select("modulo, pode_visualizar"),
+        admin.from("perfis_permissoes").select("papel, modulo, pode_visualizar"),
         admin.from("usuarios_permissoes").select("modulo, pode_visualizar").eq("usuario_id", usuarioId),
       ])
 
