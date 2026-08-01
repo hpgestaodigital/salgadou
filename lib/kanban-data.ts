@@ -12,3 +12,15 @@ export type TarefaKanban = {
   prazo: string | null
   created_at: string
 }
+
+export type AcaoAuditoria = {
+  id: number
+  tabela: string
+  registro_id: string | null
+  registro_titulo: string | null
+  acao: "criou" | "alterou" | "excluiu"
+  usuario_id: string
+  usuario_nome: string
+  usuario_email: string | null
+  ocorrido_em: string
+}

@@ -2,7 +2,7 @@
 
 import useSWR from "swr"
 import { useState } from "react"
-import { Loader2, Plus, ShieldCheck } from "lucide-react"
+import { Loader2, Pencil, Plus, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/page-header"
 import { ConfirmDeleteButton } from "@/components/confirm-button"
@@ -23,6 +23,7 @@ type UsuarioApi = {
   nome: string
   papel: Papel
   criado_em: string
+  colaborador_id: string | null
 }
 
 const vazio = { nome: "", email: "", senha: "", papel: "socio" as Papel }
@@ -44,6 +45,9 @@ export function GestaoUsuarios() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<typeof vazio>(vazio)
   const [saving, setSaving] = useState(false)
+  const [editUser, setEditUser] = useState<UsuarioApi | null>(null)
+  const [editName, setEditName] = useState("")
+  const [savingName, setSavingName] = useState(false)
 
   function abrirNovo() {
     setForm(vazio)
@@ -83,6 +87,24 @@ export function GestaoUsuarios() {
     }
     toast.success("Usuário removido.")
     mutate()
+  }
+
+  async function salvarNome() {
+    if (!editUser) return
+    if (editName.trim().length < 2) return toast.error("Informe o nome completo.")
+    setSavingName(true)
+    try {
+      const res = await fetch("/api/usuarios", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ usuario_id: editUser.id, nome: editName.trim() }) })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Erro ao atualizar nome.")
+      toast.success("Nome do usuário atualizado.")
+      setEditUser(null)
+      await mutate()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao atualizar nome.")
+    } finally {
+      setSavingName(false)
+    }
   }
 
   const usuarios = data ?? []
@@ -157,7 +179,8 @@ export function GestaoUsuarios() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">{u.criado_em ? formatDate(u.criado_em) : "—"}</TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => { setEditUser(u); setEditName(u.nome) }} aria-label="Editar nome do usuário" title="Editar nome do usuário"><Pencil className="size-4" /></Button>
                           {ehAdminPadrao ? (
                             <span className="text-xs text-muted-foreground pr-2">Protegido</span>
                           ) : (
@@ -217,6 +240,7 @@ export function GestaoUsuarios() {
                 <SelectContent>
                   <SelectItem value="socio">Sócio</SelectItem>
                   <SelectItem value="colaborador">Colaborador</SelectItem>
+                  <SelectItem value="juridico">Jurídico</SelectItem>
                   <SelectItem value="admin">Administrador</SelectItem>
                 </SelectContent>
               </Select>
@@ -231,6 +255,14 @@ export function GestaoUsuarios() {
               Criar usuário
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(editUser)} onOpenChange={(aberto) => { if (!aberto) setEditUser(null) }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar nome do usuário</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Este será o nome oficial exibido no histórico, na navegação e no “Meu trabalho”.</p>
+          <div className="grid gap-1.5"><Label htmlFor="edit-user-name">Nome</Label><Input id="edit-user-name" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Ex.: Henrique Polite" /></div>
+          <DialogFooter><Button variant="outline" onClick={() => setEditUser(null)}>Cancelar</Button><Button onClick={salvarNome} disabled={savingName}>{savingName && <Loader2 className="size-4 animate-spin" />}Salvar nome</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

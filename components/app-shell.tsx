@@ -17,6 +17,8 @@ import {
   ShieldCheck,
   LogOut,
   MessagesSquare,
+  Scale,
+  History,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -27,15 +29,17 @@ import { useTable } from "@/lib/use-data"
 import type { Configuracao } from "@/lib/types"
 
 const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
-  { href: "/escala", label: "Escala Semanal", icon: CalendarDays, adminOnly: false },
-  { href: "/kanban", label: "Kanban", icon: KanbanSquare, adminOnly: false },
-  { href: "/reunioes", label: "Reuniões", icon: MessagesSquare, adminOnly: false },
-  { href: "/pagamentos-fornecedores", label: "Pagto. Fornecedores", icon: Truck, adminOnly: false },
-  { href: "/pagamentos-motoboys", label: "Pagto. Motoboys", icon: Bike, adminOnly: false },
-  { href: "/cadastros", label: "Cadastros", icon: Users, adminOnly: false },
-  { href: "/usuarios", label: "Usuários", icon: ShieldCheck, adminOnly: true },
-  { href: "/configuracoes", label: "Configurações", icon: Settings, adminOnly: false },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/escala", label: "Escala Semanal", icon: CalendarDays },
+  { href: "/kanban", label: "Kanban", icon: KanbanSquare },
+  { href: "/reunioes", label: "Reuniões", icon: MessagesSquare },
+  { href: "/juridico", label: "Jurídico", icon: Scale, roles: ["admin", "socio", "juridico"] as Papel[] },
+  { href: "/historico", label: "Histórico", icon: History },
+  { href: "/pagamentos-fornecedores", label: "Pagto. Fornecedores", icon: Truck },
+  { href: "/pagamentos-motoboys", label: "Pagto. Motoboys", icon: Bike },
+  { href: "/cadastros", label: "Cadastros", icon: Users },
+  { href: "/usuarios", label: "Usuários", icon: ShieldCheck, roles: ["admin"] as Papel[] },
+  { href: "/configuracoes", label: "Configurações", icon: Settings },
 ]
 
 type SessaoUI = { nome: string; papel: Papel; admin: boolean; avatarUrl: string } | null
@@ -86,7 +90,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
-  const itens = NAV.filter((item) => !item.adminOnly || sessao?.admin)
+  const itens = NAV.filter((item) => {
+    if (sessao?.papel === "juridico") return item.href === "/juridico"
+    return !item.roles || (sessao && item.roles.includes(sessao.papel))
+  })
 
   return (
     <div className="flex min-h-screen bg-background">

@@ -31,8 +31,12 @@ export async function GET() {
 
   try {
     const admin = createAdminClient()
-    const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    const [{ data, error }, { data: vinculos, error: vinculosError }] = await Promise.all([
+      admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+      admin.from("usuarios_vinculos").select("usuario_id, colaborador_id"),
+    ])
     if (error) throw error
+    if (vinculosError && !["42P01", "PGRST205"].includes(vinculosError.code)) throw vinculosError
 
     const usuarios = data.users.map((u) => ({
       id: u.id,
@@ -40,8 +44,45 @@ export async function GET() {
       nome: (u.user_metadata?.nome as string) || "",
       papel: (u.email === ADMIN_EMAIL ? "admin" : (u.app_metadata?.role as string)) || "colaborador",
       criado_em: u.created_at,
+      colaborador_id: vinculos?.find((v) => v.usuario_id === u.id)?.colaborador_id ?? null,
     }))
     return NextResponse.json({ usuarios })
+  } catch (e) {
+    return tratarErroServico(e)
+  }
+}
+
+export async function PATCH(request: Request) {
+  const { ok } = await exigirAdmin()
+  if (!ok) return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
+
+  try {
+    const body = await request.json()
+    const usuarioId = String(body?.usuario_id ?? "")
+    const nome = String(body?.nome ?? "").trim()
+    if (!/^[0-9a-f-]{36}$/i.test(usuarioId) || nome.length < 2 || nome.length > 100) {
+      return NextResponse.json({ error: "Informe um nome válido." }, { status: 400 })
+    }
+
+    const admin = createAdminClient()
+    const { data: pessoas, error: pessoaError } = await admin.from("colaboradores").select("id, nome").eq("ativo", true).ilike("nome", nome).limit(2)
+    if (pessoaError) throw pessoaError
+    const pessoa = pessoas?.length === 1 ? pessoas[0] : null
+    if (pessoa) {
+      const { data: existente } = await admin.from("usuarios_vinculos").select("usuario_id").eq("colaborador_id", pessoa.id).maybeSingle()
+      if (existente && existente.usuario_id !== usuarioId) return NextResponse.json({ error: "Este cadastro já pertence a outro usuário." }, { status: 409 })
+    }
+    const { data: usuarioAtual, error: usuarioError } = await admin.auth.admin.getUserById(usuarioId)
+    if (usuarioError) throw usuarioError
+    const { error: nomeError } = await admin.auth.admin.updateUserById(usuarioId, { user_metadata: { ...usuarioAtual.user.user_metadata, nome } })
+    if (nomeError) throw nomeError
+    const { error: clearError } = await admin.from("usuarios_vinculos").delete().eq("usuario_id", usuarioId)
+    if (clearError) throw clearError
+    if (pessoa) {
+      const { error: linkError } = await admin.from("usuarios_vinculos").insert({ usuario_id: usuarioId, colaborador_id: pessoa.id })
+      if (linkError) throw linkError
+    }
+    return NextResponse.json({ ok: true })
   } catch (e) {
     return tratarErroServico(e)
   }
@@ -61,12 +102,15 @@ export async function POST(request: Request) {
     if (!email || !senha) {
       return NextResponse.json({ error: "E-mail e senha são obrigatórios." }, { status: 400 })
     }
+    if (!["admin", "socio", "colaborador", "juridico"].includes(papel)) {
+      return NextResponse.json({ error: "Papel de usuário inválido." }, { status: 400 })
+    }
     if (senha.length < 6) {
       return NextResponse.json({ error: "A senha deve ter ao menos 6 caracteres." }, { status: 400 })
     }
 
     const admin = createAdminClient()
-    const { error } = await admin.auth.admin.createUser({
+    const { data: criado, error } = await admin.auth.admin.createUser({
       email,
       password: senha,
       email_confirm: true,
@@ -79,6 +123,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Já existe um usuário com este e-mail." }, { status: 409 })
       }
       throw error
+    }
+    const { data: pessoas } = await admin.from("colaboradores").select("id").eq("ativo", true).ilike("nome", nome).limit(2)
+    if (criado.user && pessoas?.length === 1) {
+      await admin.from("usuarios_vinculos").insert({ usuario_id: criado.user.id, colaborador_id: pessoas[0].id })
     }
     return NextResponse.json({ ok: true })
   } catch (e) {

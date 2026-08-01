@@ -391,7 +391,7 @@ export function PagamentosMotoboys() {
             <div className="grid gap-1.5 sm:col-span-2">
               <Label>Motoboy</Label>
               <Select value={form.motoboy_id} onValueChange={(id) => id && selecionarMotoboy(id)}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione o motoboy" />
                 </SelectTrigger>
                 <SelectContent>
@@ -469,7 +469,7 @@ export function PagamentosMotoboys() {
               />
             </div>
             <div className="grid gap-3 sm:col-span-2 rounded-lg border p-4">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <Label>Detalhes opcionais por entrega</Label>
                   <p className="text-xs text-muted-foreground">
@@ -481,52 +481,77 @@ export function PagamentosMotoboys() {
                 </Button>
               </div>
               {entregasForm.map((entrega, index) => (
-                <div key={entrega.id} className="grid gap-2 rounded-md bg-muted/50 p-3 sm:grid-cols-6">
-                  <Input
+                <div key={entrega.id} className="rounded-lg border bg-muted/30 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold">Entrega {index + 1}</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setEntregasForm(entregasForm.filter((item) => item.id !== entrega.id))}
+                      aria-label={`Remover entrega ${index + 1}`}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid min-w-0 gap-1.5">
+                    <Label htmlFor={`identificador-${entrega.id}`}>Identificador #</Label>
+                    <Input
+                    id={`identificador-${entrega.id}`}
                     aria-label={`Identificador da entrega ${index + 1}`}
-                    placeholder="#"
+                    placeholder="Ex.: #A12"
                     value={entrega.identificador}
                     onChange={(e) => setEntregasForm(entregasForm.map((item) => item.id === entrega.id ? { ...item, identificador: e.target.value } : item))}
                   />
-                  <Input
+                  </div>
+                  <div className="grid min-w-0 gap-1.5">
+                    <Label htmlFor={`numero-entrega-${entrega.id}`}>Número da entrega</Label>
+                    <Input
+                    id={`numero-entrega-${entrega.id}`}
                     aria-label={`Número da entrega ${index + 1}`}
-                    placeholder="Nº entrega"
+                    placeholder="Ex.: 1042"
                     value={entrega.numero_entrega}
                     onChange={(e) => setEntregasForm(entregasForm.map((item) => item.id === entrega.id ? { ...item, numero_entrega: e.target.value } : item))}
                   />
-                  <Input
+                  </div>
+                  <div className="grid min-w-0 gap-1.5 sm:col-span-2">
+                    <Label htmlFor={`bairro-${entrega.id}`}>Bairro</Label>
+                    <Input
+                    id={`bairro-${entrega.id}`}
                     aria-label={`Bairro da entrega ${index + 1}`}
-                    placeholder="Bairro"
+                    placeholder="Ex.: Centro"
                     value={entrega.bairro}
                     onChange={(e) => setEntregasForm(entregasForm.map((item) => item.id === entrega.id ? { ...item, bairro: e.target.value } : item))}
                   />
-                  <Input
+                  </div>
+                  <div className="grid min-w-0 gap-1.5">
+                    <Label htmlFor={`recebido-${entrega.id}`}>Recebido do cliente (R$)</Label>
+                    <Input
+                    id={`recebido-${entrega.id}`}
                     aria-label={`Valor recebido da entrega ${index + 1}`}
                     type="number"
                     min="0"
                     step="0.01"
-                    placeholder="Recebido R$"
+                    placeholder="0,00"
                     value={entrega.valor_recebido}
                     onChange={(e) => setEntregasForm(entregasForm.map((item) => item.id === entrega.id ? { ...item, valor_recebido: e.target.value } : item))}
                   />
-                  <Input
+                  </div>
+                  <div className="grid min-w-0 gap-1.5">
+                    <Label htmlFor={`comissao-${entrega.id}`}>Comissão do motoboy (R$)</Label>
+                    <Input
+                    id={`comissao-${entrega.id}`}
                     aria-label={`Comissão da entrega ${index + 1}`}
                     type="number"
                     min="0"
                     step="0.01"
-                    placeholder="Comissão R$"
+                    placeholder="0,00"
                     value={entrega.comissao}
                     onChange={(e) => setEntregasForm(entregasForm.map((item) => item.id === entrega.id ? { ...item, comissao: e.target.value } : item))}
                   />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setEntregasForm(entregasForm.filter((item) => item.id !== entrega.id))}
-                    aria-label={`Remover entrega ${index + 1}`}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  </div>
+                  </div>
                 </div>
               ))}
             </div>

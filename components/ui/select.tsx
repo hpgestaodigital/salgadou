@@ -6,7 +6,37 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+type SelectLabelContextValue = {
+  selectedValue: unknown
+  labels: Map<string, React.ReactNode>
+}
+
+const SelectLabelContext = React.createContext<SelectLabelContextValue | null>(null)
+
+function collectSelectLabels(node: React.ReactNode, labels: Map<string, React.ReactNode>) {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return
+    const props = child.props as { value?: unknown; children?: React.ReactNode }
+    if (child.type === SelectItem && props.value !== undefined) {
+      labels.set(String(props.value), props.children)
+    }
+    if (props.children) collectSelectLabels(props.children, labels)
+  })
+}
+
+function Select<Value, Multiple extends boolean | undefined = false>(
+  props: SelectPrimitive.Root.Props<Value, Multiple>
+) {
+  const labels = new Map<string, React.ReactNode>()
+  collectSelectLabels(props.children, labels)
+  const selectedValue = props.value ?? props.defaultValue
+
+  return (
+    <SelectLabelContext.Provider value={{ selectedValue, labels }}>
+      <SelectPrimitive.Root {...props} />
+    </SelectLabelContext.Provider>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
@@ -19,11 +49,17 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
 }
 
 function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+  const context = React.useContext(SelectLabelContext)
+  const selectedLabel = context?.selectedValue == null
+    ? undefined
+    : context.labels.get(String(context.selectedValue))
+
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
       {...props}
+      children={props.children ?? (selectedLabel === undefined ? undefined : () => selectedLabel)}
     />
   )
 }

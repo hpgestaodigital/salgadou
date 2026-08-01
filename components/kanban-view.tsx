@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { useTable } from "@/lib/use-data"
 import { isSocio, type Colaborador } from "@/lib/types"
-import type { ContextoKanban, StatusKanban, TarefaKanban } from "@/lib/kanban-data"
+import type { AcaoAuditoria, ContextoKanban, StatusKanban, TarefaKanban } from "@/lib/kanban-data"
 import { formatDate, todayISO } from "@/lib/format"
 import { PageHeader } from "@/components/page-header"
 import { ConfirmDeleteButton } from "@/components/confirm-button"
@@ -40,6 +40,7 @@ export function KanbanView() {
     ascending: false,
   })
   const { data: pessoas } = useTable<Colaborador>("colaboradores", { column: "nome" })
+  const { data: auditoria, mutate: mutateAuditoria } = useTable<AcaoAuditoria>("auditoria_acoes", { column: "ocorrido_em", ascending: false })
   const [contexto, setContexto] = useState<ContextoKanban>("colaboradores")
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -104,13 +105,13 @@ export function KanbanView() {
     }
     toast.success(editId ? "Tarefa atualizada." : "Tarefa criada.")
     setOpen(false)
-    mutate()
+    await Promise.all([mutate(), mutateAuditoria()])
   }
 
   async function mover(tarefa: TarefaKanban, status: StatusKanban) {
     const { error } = await supabase.from("kanban_tarefas").update({ status }).eq("id", tarefa.id)
     if (error) return toast.error("Não foi possível mover a tarefa.")
-    mutate()
+    await Promise.all([mutate(), mutateAuditoria()])
   }
 
   async function excluir(id: string) {
@@ -153,7 +154,11 @@ export function KanbanView() {
               <CardContent className="grid gap-3">
                 {isLoading ? <p className="text-sm text-muted-foreground">Carregando...</p> : itens.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma tarefa.</p>
-                ) : itens.map((tarefa) => (
+                ) : itens.map((tarefa) => {
+                  const acoes = auditoria.filter((acao) => acao.tabela === "kanban_tarefas" && acao.registro_id === tarefa.id)
+                  const criacao = [...acoes].reverse().find((acao) => acao.acao === "criou")
+                  const ultimaAlteracao = acoes.find((acao) => acao.acao === "alterou")
+                  return (
                   <div key={tarefa.id} className="rounded-lg border bg-background p-3 shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-semibold">{tarefa.titulo}</p>
@@ -171,6 +176,10 @@ export function KanbanView() {
                         <CalendarDays className="size-3" /> Prazo: {formatDate(tarefa.prazo)}
                       </p>
                     )}
+                    <div className="mt-3 border-t pt-2 text-[11px] leading-relaxed text-muted-foreground">
+                      {criacao ? <p>Criado por {criacao.usuario_nome} · {new Date(criacao.ocorrido_em).toLocaleString("pt-BR")}</p> : <p>Autoria não registrada (tarefa anterior ao histórico)</p>}
+                      {ultimaAlteracao && <p>Última alteração por {ultimaAlteracao.usuario_nome} · {new Date(ultimaAlteracao.ocorrido_em).toLocaleString("pt-BR")}</p>}
+                    </div>
                     <Select
                       value={tarefa.status === "a_fazer" ? "nao_realizado" : tarefa.status}
                       onValueChange={(status) => status && mover(tarefa, status as StatusKanban)}
@@ -181,7 +190,8 @@ export function KanbanView() {
                       </SelectContent>
                     </Select>
                   </div>
-                ))}
+                  )
+                })}
               </CardContent>
             </Card>
           )
