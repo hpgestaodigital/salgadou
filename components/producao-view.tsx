@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { CalendarDays, Loader2, Package, Plus, ShoppingCart } from "lucide-react"
+import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Package, Plus, ShoppingCart } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { carregarPermissoes, type Permissoes } from "@/lib/access-control"
@@ -38,7 +38,10 @@ export function ProducaoView() {
   const [novoInsumo, setNovoInsumo] = useState({ nome: "", unidade: "kg", estoque_atual: "", estoque_minimo: "" })
   const [novoProduto, setNovoProduto] = useState({ nome: "", unidade: "un" })
   const [novaReceita, setNovaReceita] = useState({ produto_id: "", insumo_id: "", quantidade: "" })
-  const [novoPlano, setNovoPlano] = useState({ data_producao: new Date().toISOString().slice(0, 10), produto_id: "", quantidade: "", observacoes: "" })
+  const hoje = new Date()
+  const [novoPlano, setNovoPlano] = useState({ data_producao: hoje.toISOString().slice(0, 10), produto_id: "", quantidade: "", observacoes: "" })
+  const [mesCalendario, setMesCalendario] = useState(new Date(hoje.getFullYear(), hoje.getMonth(), 1))
+  const [diaSelecionado, setDiaSelecionado] = useState(hoje.toISOString().slice(0, 10))
 
   const abas = useMemo(() => {
     const lista: string[] = []
@@ -49,6 +52,35 @@ export function ProducaoView() {
   }, [permissoes])
   const solicitada = searchParams.get("tab") || ""
   const abaInicial = abas.includes(solicitada) ? solicitada : abas[0] || "planejamento"
+
+  const planosPorData = useMemo(() => planos.reduce<Record<string, Plano[]>>((grupo, plano) => {
+    grupo[plano.data_producao] = [...(grupo[plano.data_producao] || []), plano]
+    return grupo
+  }, {}), [planos])
+
+  const diasCalendario = useMemo(() => {
+    const ano = mesCalendario.getFullYear()
+    const mes = mesCalendario.getMonth()
+    const inicio = new Date(ano, mes, 1 - new Date(ano, mes, 1).getDay())
+    return Array.from({ length: 42 }, (_, indice) => {
+      const data = new Date(inicio)
+      data.setDate(inicio.getDate() + indice)
+      const chave = [data.getFullYear(), String(data.getMonth() + 1).padStart(2, "0"), String(data.getDate()).padStart(2, "0")].join("-")
+      return { data, chave, pertenceAoMes: data.getMonth() === mes }
+    })
+  }, [mesCalendario])
+
+  const planosSelecionados = planosPorData[diaSelecionado] || []
+  const tituloMes = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(mesCalendario)
+
+  function navegarMes(direcao: number) {
+    setMesCalendario((atual) => new Date(atual.getFullYear(), atual.getMonth() + direcao, 1))
+  }
+
+  function selecionarDia(chave: string) {
+    setDiaSelecionado(chave)
+    setNovoPlano((atual) => ({ ...atual, data_producao: chave }))
+  }
 
   async function carregar() {
     setLoading(true)
@@ -240,14 +272,52 @@ export function ProducaoView() {
               </CardContent>
             </Card>
           </div>
-          <Card>
-            <CardHeader><CardTitle>Calendário de produção</CardTitle></CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {planos.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma produção planejada.</p>}
-              {planos.map((plano) => {
-                const produto = produtos.find((item) => item.id === plano.produto_id)
-                return <div key={plano.id} className="rounded-xl border p-4"><p className="text-xs font-bold uppercase tracking-wide text-primary">{plano.data_producao}</p><p className="mt-1 font-semibold">{produto?.nome || "Produto"}</p><p className="text-sm text-muted-foreground">{plano.quantidade} {produto?.unidade} · {plano.status}</p>{plano.observacoes && <p className="mt-2 text-xs">{plano.observacoes}</p>}</div>
-              })}
+          <Card className="overflow-hidden">
+            <CardHeader className="border-b">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div><CardTitle>Calendário mensal</CardTitle><p className="mt-1 text-sm text-muted-foreground">Selecione um dia para conferir ou programar a produção.</p></div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="icon" onClick={() => navegarMes(-1)} aria-label="Mês anterior"><ChevronLeft className="size-4" /></Button>
+                  <p className="min-w-36 text-center font-semibold capitalize">{tituloMes}</p>
+                  <Button variant="outline" size="icon" onClick={() => navegarMes(1)} aria-label="Próximo mês"><ChevronRight className="size-4" /></Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-5 p-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="overflow-x-auto"><div className="min-w-[680px]">
+                <div className="grid grid-cols-7 border-b pb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((dia) => <div key={dia}>{dia}</div>)}
+                </div>
+                <div className="mt-2 grid grid-cols-7 gap-1.5">
+                  {diasCalendario.map(({ data, chave, pertenceAoMes }) => {
+                    const producoes = planosPorData[chave] || []
+                    const selecionado = chave === diaSelecionado
+                    const atual = chave === hoje.toISOString().slice(0, 10)
+                    return <button type="button" key={chave} onClick={() => selecionarDia(chave)} className={`min-h-28 rounded-xl border p-2 text-left transition-colors hover:border-primary/60 hover:bg-primary/5 ${selecionado ? "border-primary bg-primary/10 ring-1 ring-primary" : ""} ${pertenceAoMes ? "" : "opacity-40"}`}>
+                      <span className={`inline-flex size-7 items-center justify-center rounded-full text-xs font-semibold ${atual ? "bg-primary text-primary-foreground" : ""}`}>{data.getDate()}</span>
+                      <div className="mt-1 grid gap-1">
+                        {producoes.slice(0, 2).map((plano) => {
+                          const produto = produtos.find((item) => item.id === plano.produto_id)
+                          return <span key={plano.id} className="truncate rounded-md bg-primary px-1.5 py-1 text-[11px] font-medium text-primary-foreground">{produto?.nome || "Produção"} · {plano.quantidade}</span>
+                        })}
+                        {producoes.length > 2 && <span className="text-[11px] font-medium text-primary">+{producoes.length - 2} produções</span>}
+                      </div>
+                    </button>
+                  })}
+                </div>
+              </div></div>
+              <aside className="rounded-xl border bg-muted/20 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-primary">Dia selecionado</p>
+                <h3 className="mt-1 text-lg font-semibold">{new Intl.DateTimeFormat("pt-BR", { dateStyle: "long", timeZone: "UTC" }).format(new Date(diaSelecionado + "T12:00:00Z"))}</h3>
+                <Button className="mt-3 w-full" variant="outline" onClick={() => setNovoPlano((atual) => ({ ...atual, data_producao: diaSelecionado }))}><Plus className="size-4" />Programar neste dia</Button>
+                <div className="mt-4 grid gap-3">
+                  {planosSelecionados.length === 0 && <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nenhuma produção marcada neste dia.</p>}
+                  {planosSelecionados.map((plano) => {
+                    const produto = produtos.find((item) => item.id === plano.produto_id)
+                    return <div key={plano.id} className="rounded-lg border bg-background p-3"><p className="font-semibold">{produto?.nome || "Produto"}</p><p className="text-sm text-muted-foreground">{plano.quantidade} {produto?.unidade} · {plano.status}</p>{plano.observacoes && <p className="mt-2 text-xs">{plano.observacoes}</p>}</div>
+                  })}
+                </div>
+              </aside>
             </CardContent>
           </Card>
         </TabsContent>
