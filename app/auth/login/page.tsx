@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Loader2, LogIn, UtensilsCrossed } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,7 +19,6 @@ export default function LoginPage() {
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
-  // Garante o usuário admin padrão assim que a tela de login carrega.
   useEffect(() => {
     fetch("/api/auth/ensure-admin", { method: "POST" }).catch(() => {})
   }, [])
@@ -81,7 +81,12 @@ export default function LoginPage() {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="senha">Senha</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="senha">Senha</Label>
+                  <Link href="/auth/forgot-password" className="text-xs font-medium text-primary hover:underline">
+                    Esqueci minha senha
+                  </Link>
+                </div>
                 <Input
                   id="senha"
                   type="password"
