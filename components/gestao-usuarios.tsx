@@ -25,6 +25,7 @@ type UsuarioApi = {
   papel: Papel
   criado_em: string
   colaborador_id: string | null
+  deve_trocar_senha: boolean
 }
 
 const vazio = { nome: "", email: "", senha: "", papel: "socio" as Papel }
@@ -145,6 +146,7 @@ export function GestaoUsuarios() {
                 <TableHead>Nome</TableHead>
                 <TableHead>E-mail</TableHead>
                 <TableHead>Papel</TableHead>
+                <TableHead>Status da senha</TableHead>
                 <TableHead>Criado em</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -179,6 +181,17 @@ export function GestaoUsuarios() {
                           <Badge variant="secondary">{PAPEL_LABEL[u.papel]}</Badge>
                         )}
                       </TableCell>
+                      <TableCell>
+  {u.deve_trocar_senha ? (
+    <Badge variant="outline" className="text-amber-600 border-amber-600">
+      Troca pendente
+    </Badge>
+  ) : (
+    <Badge variant="secondary">
+      Senha definida
+    </Badge>
+  )}
+</TableCell>
                       <TableCell className="text-muted-foreground">{u.criado_em ? formatDate(u.criado_em) : "—"}</TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">

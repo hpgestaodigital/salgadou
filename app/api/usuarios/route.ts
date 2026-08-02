@@ -40,13 +40,14 @@ export async function GET() {
     if (vinculosError && !["42P01", "PGRST205"].includes(vinculosError.code)) throw vinculosError
 
     const usuarios = data.users.map((u) => ({
-      id: u.id,
-      email: u.email,
-      nome: (u.user_metadata?.nome as string) || "",
-      papel: (u.email === ADMIN_EMAIL ? "admin" : (u.app_metadata?.role as string)) || "colaborador",
-      criado_em: u.created_at,
-      colaborador_id: vinculos?.find((v) => v.usuario_id === u.id)?.colaborador_id ?? null,
-    }))
+  id: u.id,
+  email: u.email,
+  nome: (u.user_metadata?.nome as string) || "",
+  papel: (u.email === ADMIN_EMAIL ? "admin" : (u.app_metadata?.role as string)) || "colaborador",
+  criado_em: u.created_at,
+  colaborador_id: vinculos?.find((v) => v.usuario_id === u.id)?.colaborador_id ?? null,
+  deve_trocar_senha: u.app_metadata?.must_change_password === true,
+}))
     return NextResponse.json({ usuarios })
   } catch (e) {
     return tratarErroServico(e)
@@ -116,7 +117,10 @@ export async function POST(request: Request) {
       password: senha,
       email_confirm: true,
       user_metadata: { nome },
-      app_metadata: { role: papel },
+      app_metadata: {
+  role: papel,
+  must_change_password: true,
+},
     })
     if (error) {
       const msg = error.message.toLowerCase()

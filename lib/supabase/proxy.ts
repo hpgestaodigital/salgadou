@@ -56,6 +56,8 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
   const rotaPublica = ROTAS_PUBLICAS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  const rotaTrocarSenha = pathname === "/auth/trocar-senha"
+  const deveTrocarSenha = user?.app_metadata?.must_change_password === true
 
   if (!user && !rotaPublica) {
     const url = request.nextUrl.clone()
@@ -64,10 +66,27 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && pathname === "/auth/login") {
-    const url = request.nextUrl.clone()
-    url.pathname = "/"
-    return NextResponse.redirect(url)
-  }
+  const url = request.nextUrl.clone()
+  url.pathname = deveTrocarSenha ? "/auth/trocar-senha" : "/"
+  return NextResponse.redirect(url)
+}
+if (
+  user &&
+  deveTrocarSenha &&
+  !rotaTrocarSenha &&
+  !pathname.startsWith("/api/auth/trocar-senha")
+) {
+  const url = request.nextUrl.clone()
+  url.pathname = "/auth/trocar-senha"
+  url.search = ""
+  return NextResponse.redirect(url)
+}
+
+if (user && !deveTrocarSenha && rotaTrocarSenha) {
+  const url = request.nextUrl.clone()
+  url.pathname = "/"
+  return NextResponse.redirect(url)
+}
 
   if (user && !rotaPublica && !pathname.startsWith("/api/")) {
     const papel = String(user.app_metadata?.role || "colaborador")
