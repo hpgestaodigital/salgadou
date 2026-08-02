@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { enviarEvolution } from "@/lib/evolution/server"
+import { enviarEvolution, evolutionConfigurada } from "@/lib/evolution/server"
 
 export async function POST(request: Request) {
   try {
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const cfg = Object.fromEntries((data ?? []).map((r) => [r.chave, r.valor])) as Record<string, string | null>
     const url = cfg.evolution_url
     const instance = cfg.evolution_instance
-    if (!url || !instance || !process.env.EVOLUTION_API_KEY) {
+    if (!(await evolutionConfigurada(url, instance))) {
       return NextResponse.json(
         { error: "Evolution API não configurada. Preencha em Configurações." },
         { status: 400 },

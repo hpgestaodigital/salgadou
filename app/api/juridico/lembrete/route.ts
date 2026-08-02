@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient()
   const { data: cfgRows } = await admin.from("configuracoes").select("chave, valor").in("chave", ["evolution_url", "evolution_instance"])
   const cfg = Object.fromEntries((cfgRows ?? []).map((r) => [r.chave, r.valor])) as Record<string, string | null>
-  const configurada = evolutionConfigurada(cfg.evolution_url, cfg.evolution_instance)
+  const configurada = await evolutionConfigurada(cfg.evolution_url, cfg.evolution_instance)
   const resultados: Array<{ nome: string; status: string }> = []
 
   for (const destino of destinatarios) {

@@ -1,7 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { ChevronLeft, ChevronRight, Loader2, Save, Send } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { ChevronLeft, ChevronRight, Eye, Loader2, Save, Send } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { useTable } from "@/lib/use-data"
@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getPapel } from "@/lib/auth-roles"
 
 type Draft = Record<string, Partial<Escala>>
 
@@ -58,6 +59,8 @@ export function EscalaView() {
   const [draft, setDraft] = useState<Draft>({})
   const [saving, setSaving] = useState(false)
   const [enviando, setEnviando] = useState(false)
+  const [podeEditar, setPodeEditar] = useState(false)
+  const [papelCarregado, setPapelCarregado] = useState(false)
 
   const { data: colaboradores, isLoading } = useTable<Colaborador>("colaboradores", { column: "nome" })
   const { data: escalas, mutate } = useTable<Escala>("escala")
@@ -65,7 +68,23 @@ export function EscalaView() {
 
   const ativos = useMemo(() => colaboradores.filter((c) => c.ativo), [colaboradores])
 
+  useEffect(() => {
+    let ativo = true
+    supabase.auth.getUser().then(({ data }: { data: { user: import("@supabase/supabase-js").User | null } }) => {
+      if (!ativo) return
+      setPodeEditar(getPapel(data.user) !== "colaborador")
+      setPapelCarregado(true)
+    })
+    return () => {
+      ativo = false
+    }
+  }, [supabase])
+
   async function enviarLembretes() {
+    if (!podeEditar) {
+      toast.error("A escala está disponível somente para consulta no seu acesso.")
+      return
+    }
     const template =
       config.find((c) => c.chave === TEMPLATE_KEYS.escala)?.valor ||
       "Olá {nome}! Lembrete da Salgadou: você tem escala nesta semana."
@@ -104,6 +123,7 @@ export function EscalaView() {
   }
 
   function setValue(colId: string, dia: string, value: string) {
+    if (!podeEditar) return
     setDraft((prev) => ({ ...prev, [colId]: { ...prev[colId], [dia]: value } }))
   }
 
@@ -122,6 +142,10 @@ export function EscalaView() {
   }
 
   async function salvar() {
+    if (!podeEditar) {
+      toast.error("Seu acesso permite apenas visualizar a escala.")
+      return
+    }
     setSaving(true)
     try {
       const rows = ativos
@@ -168,9 +192,11 @@ export function EscalaView() {
     <div>
       <PageHeader
         title="Escala Semanal"
-        description="Defina intervalos precisos e até dois turnos por dia, por exemplo: 08:00–13:00 / 18:00–22:00."
+        description={podeEditar
+          ? "Defina intervalos precisos e até dois turnos por dia, por exemplo: 08:00–13:00 / 18:00–22:00."
+          : "Consulte seus horários e os turnos definidos pelos responsáveis pela escala."}
         action={
-          <>
+          papelCarregado && podeEditar ? <>
             <Button variant="outline" onClick={enviarLembretes} disabled={enviando || ativos.length === 0}>
               {enviando ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
               Enviar lembretes
@@ -179,9 +205,19 @@ export function EscalaView() {
               {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
               Salvar escala
             </Button>
-          </>
+          </> : undefined
         }
       />
+
+      {papelCarregado && !podeEditar && (
+        <Card className="mb-6 flex items-center gap-3 border-primary/25 bg-primary/5 p-4 text-sm">
+          <Eye className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <div>
+            <p className="font-semibold">Escala somente para visualização</p>
+            <p className="text-muted-foreground">Os horários são definidos pelos responsáveis e não podem ser alterados neste acesso.</p>
+          </div>
+        </Card>
+      )}
 
       <Card className="p-4 mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
@@ -245,9 +281,10 @@ export function EscalaView() {
                         <Input
                           value={getValue(c.id, d.key)}
                           onChange={(e) => setValue(c.id, d.key, e.target.value)}
-                          placeholder="08:00–13:00 / 18:00–22:00"
-                          className="h-9 text-center text-xs"
-                          aria-label={`${c.nome}, ${d.label}: intervalos de horário`}
+                          readOnly={!podeEditar}
+                          placeholder={podeEditar ? "08:00–13:00 / 18:00–22:00" : "Sem horário"}
+                          className={`h-9 text-center text-xs ${!podeEditar ? "cursor-default border-transparent bg-transparent shadow-none focus-visible:ring-0" : ""}`}
+                          aria-label={`${c.nome}, ${d.label}: intervalos de horário${podeEditar ? "" : ", somente leitura"}`}
                         />
                       </TableCell>
                     ))}

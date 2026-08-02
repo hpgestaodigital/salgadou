@@ -77,6 +77,9 @@ export function Configuracoes() {
   const [uploading, setUploading] = useState<"logo" | "avatar" | null>(null)
   const [savingAvatar, setSavingAvatar] = useState(false)
   const [evolutionConfigured, setEvolutionConfigured] = useState(false)
+  const [evolutionApiKey, setEvolutionApiKey] = useState("")
+  const [podeConfigurarEvolution, setPodeConfigurarEvolution] = useState(false)
+  const [cronConfigured, setCronConfigured] = useState(false)
   const [podeAlterarMarca, setPodeAlterarMarca] = useState(false)
 
   useEffect(() => {
@@ -104,6 +107,8 @@ export function Configuracoes() {
       setAvatarUrl(String(data.user?.user_metadata?.avatar_url ?? ""))
       const papel = getPapel(data.user)
       setPodeAlterarMarca(papel === "admin" || papel === "financeiro" || papel === "socio")
+      setPodeConfigurarEvolution(papel === "admin")
+      if (papel === "admin") fetch("/api/notifications/evolution-secret").then((res) => res.json()).then((status) => setCronConfigured(Boolean(status.cronConfigured))).catch(() => {})
     })
   }, [supabase])
 
@@ -127,6 +132,12 @@ export function Configuracoes() {
       }))
       const { error } = await supabase.from("configuracoes").upsert(rows, { onConflict: "chave" })
       if (error) throw error
+      if (evolutionApiKey.trim()) {
+        const secretResponse = await fetch("/api/notifications/evolution-secret", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: evolutionApiKey }) })
+        const secretResult = await secretResponse.json().catch(() => null)
+        if (!secretResponse.ok) throw new Error(secretResult?.error || "Não foi possível salvar a API Key.")
+        setEvolutionApiKey("")
+      }
       const status = await fetch("/api/notifications/status").then((res) => res.json()).catch(() => null)
       if (status) setEvolutionConfigured(Boolean(status.configured))
       toast.success("Configurações salvas.")
@@ -251,7 +262,7 @@ export function Configuracoes() {
               )}
             </div>
             <CardDescription>
-              O endereço e a instância ficam no banco. A API Key permanece somente nos segredos do servidor.
+              O endereço e a instância ficam no banco. A API Key é criptografada no Supabase Vault e nunca é exibida novamente.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -281,11 +292,13 @@ export function Configuracoes() {
                 <Input
                   id="key"
                   type="password"
-                  value={conectado ? "configurada-no-servidor" : ""}
-                  placeholder="Defina EVOLUTION_API_KEY no servidor"
-                  disabled
+                  value={evolutionApiKey}
+                  onChange={(e) => setEvolutionApiKey(e.target.value)}
+                  placeholder={conectado ? "Deixe vazio para manter a chave atual" : "Cole a API Key da Evolution"}
+                  disabled={!podeConfigurarEvolution || loading}
+                  autoComplete="new-password"
                 />
-                <p className="text-xs text-muted-foreground">A chave nunca é salva no navegador ou no banco.</p>
+                <p className="text-xs text-muted-foreground">Somente o Administrador pode substituir a chave. Ela não retorna ao navegador após salvar.</p>
               </div>
             </div>
           </CardContent>
@@ -361,6 +374,7 @@ export function Configuracoes() {
           <p className="text-xs text-muted-foreground sm:col-span-2">
             O responsável recebe o aviso. Sem responsável, todos os Sócios ativos com WhatsApp recebem.
           </p>
+          {podeConfigurarEvolution && <p className="text-xs text-muted-foreground sm:col-span-2">Agendador automático: <span className={cronConfigured ? "text-emerald-500" : "text-amber-500"}>{cronConfigured ? "configurado na hospedagem" : "pendente na hospedagem"}</span>.</p>}
         </CardContent>
       </Card>
 

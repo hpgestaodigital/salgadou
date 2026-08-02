@@ -13,7 +13,7 @@ export async function notificarRegistro(tipo: Tipo, id: string, evento: Evento, 
   const db = createAdminClient()
   const { data: configRows } = await db.from("configuracoes").select("chave,valor").in("chave", ["notificacoes_ativas", "evolution_url", "evolution_instance"])
   const config = Object.fromEntries((configRows ?? []).map((item) => [item.chave, item.valor]))
-  if (!evolutionConfigurada(config.evolution_url, config.evolution_instance)) return { status: "nao_configurada" }
+  if (!(await evolutionConfigurada(config.evolution_url, config.evolution_instance))) return { status: "nao_configurada" }
   if (config.notificacoes_ativas !== "true") return { status: "desativada" }
 
   const tabela = tipo === "fornecedor" ? "pagamentos_fornecedores" : tipo === "motoboy" ? "pagamentos_motoboys" : "kanban_tarefas"
