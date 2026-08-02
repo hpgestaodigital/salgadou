@@ -6,6 +6,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Package, Plus, Shoppi
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { carregarPermissoes, type Permissoes } from "@/lib/access-control"
+import { isSocio, type Colaborador } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,6 +36,7 @@ export function ProducaoView() {
   const [planos, setPlanos] = useState<Plano[]>([])
   const [necessidades, setNecessidades] = useState<Necessidade[]>([])
   const [compras, setCompras] = useState<Compra[]>([])
+  const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
 
   const [novoInsumo, setNovoInsumo] = useState({ nome: "", unidade: "kg", estoque_atual: "", estoque_minimo: "" })
   const [novoProduto, setNovoProduto] = useState({ nome: "", unidade: "un" })
@@ -43,6 +45,7 @@ export function ProducaoView() {
   const [novoPlano, setNovoPlano] = useState({ data_producao: hoje.toISOString().slice(0, 10), produto_id: "", quantidade: "", observacoes: "" })
   const [mesCalendario, setMesCalendario] = useState(new Date(hoje.getFullYear(), hoje.getMonth(), 1))
   const [diaSelecionado, setDiaSelecionado] = useState(hoje.toISOString().slice(0, 10))
+  const [preparo, setPreparo] = useState({ ativo: false, insumo_ids: [] as string[], responsavel_id: "" })
 
   const abas = useMemo(() => {
     const lista: string[] = []
@@ -72,6 +75,11 @@ export function ProducaoView() {
   }, [mesCalendario])
 
   const planosSelecionados = planosPorData[diaSelecionado] || []
+  const colaboradoresAtivos = colaboradores.filter((p) => p.ativo && !isSocio(p))
+  const insumosPreparo = useMemo(() => {
+    const ids = new Set(receitas.filter((r) => r.produto_id === novoPlano.produto_id).map((r) => r.insumo_id))
+    return insumos.filter((i) => ids.has(i.id))
+  }, [insumos, receitas, novoPlano.produto_id])
   const tituloMes = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(mesCalendario)
 
   function navegarMes(direcao: number) {
@@ -97,6 +105,7 @@ export function ProducaoView() {
       supabase.from("producao_planejamento").select("*").order("data_producao"),
       supabase.from("producao_necessidades").select("*").order("data_producao"),
       supabase.from("producao_lista_compras").select("*").order("data_necessidade"),
+      supabase.from("colaboradores").select("*").eq("ativo", true).order("nome"),
     ])
     const primeiroErro = consultas.find((item) => item.error)?.error
     if (primeiroErro) toast.error("Não foi possível carregar os dados da Produção.")
@@ -106,6 +115,7 @@ export function ProducaoView() {
     setPlanos((consultas[3].data ?? []) as Plano[])
     setNecessidades((consultas[4].data ?? []) as Necessidade[])
     setCompras((consultas[5].data ?? []) as Compra[])
+    setColaboradores((consultas[6].data ?? []) as Colaborador[])
     setLoading(false)
   }
 
@@ -167,15 +177,47 @@ export function ProducaoView() {
     )
   }
 
+  function alternarInsumoPreparo(insumoId: string) {
+    setPreparo((atual) => ({ ...atual, insumo_ids: atual.insumo_ids.includes(insumoId) ? atual.insumo_ids.filter((id) => id !== insumoId) : [...atual.insumo_ids, insumoId] }))
+  }
+
   async function adicionarPlano() {
     if (!novoPlano.produto_id || Number(novoPlano.quantidade) <= 0) return toast.error("Selecione produto e quantidade.")
-    await executar(
-      () => supabase.from("producao_planejamento").insert({
-        data_producao: novoPlano.data_producao, produto_id: novoPlano.produto_id,
-        quantidade: Number(novoPlano.quantidade), observacoes: novoPlano.observacoes || null,
-      }),
-      "Produção planejada.",
-    )
+    const produto = produtos.find((item) => item.id === novoPlano.produto_id)
+    const responsavel = colaboradoresAtivos.find((item) => item.id === preparo.responsavel_id)
+    const alimentos = insumosPreparo.filter((item) => preparo.insumo_ids.includes(item.id))
+    const dataPreparo = new Date(novoPlano.data_producao + "T12:00:00")
+    dataPreparo.setDate(dataPreparo.getDate() - 1)
+    const dataPreparoISO = dataPreparo.toISOString().slice(0, 10)
+    if (preparo.ativo) {
+      if (novoPlano.data_producao <= hoje.toISOString().slice(0, 10)) return toast.error("Escolha uma data futura para programar o preparo um dia antes.")
+      if (!alimentos.length) return toast.error("Selecione ao menos um alimento para o pré-preparo.")
+      if (!responsavel) return toast.error("Selecione o colaborador responsável pelo pré-preparo.")
+    }
+    setSaving(true)
+    let planoId: string | null = null
+    try {
+      const { data: plano, error: planoError } = await supabase.from("producao_planejamento").insert({ data_producao: novoPlano.data_producao, produto_id: novoPlano.produto_id, quantidade: Number(novoPlano.quantidade), observacoes: novoPlano.observacoes || null }).select("id").single()
+      if (planoError) throw planoError
+      planoId = plano.id
+      if (preparo.ativo && responsavel) {
+        const nomes = alimentos.map((item) => item.nome)
+        const { data: tarefa, error: tarefaError } = await supabase.from("kanban_tarefas").insert({
+          titulo: "Pré-preparo: " + (produto?.nome || "produção"),
+          descricao: ["Produção vinculada para " + new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(novoPlano.data_producao + "T12:00:00Z")) + ".", "Preparar: " + nomes.join(", ") + ".", "Quantidade planejada: " + novoPlano.quantidade + " " + (produto?.unidade || "un") + ".", "Referência do planejamento: " + plano.id].join("\n"),
+          contexto: "colaboradores", responsavel_id: responsavel.id, responsavel_nome: responsavel.nome, status: "nao_realizado", prazo: dataPreparoISO,
+        }).select("id").single()
+        if (tarefaError) throw tarefaError
+        void fetch("/api/notifications/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipo: "tarefa", id: tarefa.id }) }).catch(() => undefined)
+      }
+      toast.success(preparo.ativo ? "Produção e pré-preparo enviados ao Kanban." : "Produção planejada.")
+      setNovoPlano({ data_producao: novoPlano.data_producao, produto_id: "", quantidade: "", observacoes: "" })
+      setPreparo({ ativo: false, insumo_ids: [], responsavel_id: "" })
+      await carregar()
+    } catch (e) {
+      if (planoId) await supabase.from("producao_planejamento").delete().eq("id", planoId)
+      toast.error(e instanceof Error ? e.message : "Não foi possível agendar a produção e o pré-preparo.")
+    } finally { setSaving(false) }
   }
 
   async function gerarExemploProducao() {
@@ -343,11 +385,19 @@ export function ProducaoView() {
               <CardContent className="grid gap-3">
                 <div className="grid gap-2 sm:grid-cols-3">
                   <div><Label>Data</Label><Input type="date" value={novoPlano.data_producao} onChange={(e) => setNovoPlano({ ...novoPlano, data_producao: e.target.value })} /></div>
-                  <div><Label>Produto</Label><select className={selectClass} value={novoPlano.produto_id} onChange={(e) => setNovoPlano({ ...novoPlano, produto_id: e.target.value })}><option value="">Selecione</option>{produtos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></div>
+                  <div><Label>Produto</Label><select className={selectClass} value={novoPlano.produto_id} onChange={(e) => { setNovoPlano({ ...novoPlano, produto_id: e.target.value }); setPreparo((atual) => ({ ...atual, insumo_ids: [] })) }}><option value="">Selecione</option>{produtos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></div>
                   <div><Label>Quantidade</Label><Input type="number" step="0.001" value={novoPlano.quantidade} onChange={(e) => setNovoPlano({ ...novoPlano, quantidade: e.target.value })} /></div>
                 </div>
                 <Input placeholder="Observações" value={novoPlano.observacoes} onChange={(e) => setNovoPlano({ ...novoPlano, observacoes: e.target.value })} />
-                <Button onClick={adicionarPlano} disabled={saving}><CalendarDays className="size-4" />Lançar no planejamento</Button>
+                <div className="rounded-xl border bg-muted/20 p-4">
+                  <label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1 size-4 accent-primary" checked={preparo.ativo} onChange={(e) => setPreparo((atual) => ({ ...atual, ativo: e.target.checked }))} /><span><span className="block font-semibold">Preparar alimentos do recheio 1 dia antes</span><span className="block text-xs text-muted-foreground">Cria automaticamente uma tarefa no Kanban do colaborador.</span></span></label>
+                  {preparo.ativo && <div className="mt-4 grid gap-4 border-t pt-4">
+                    <div><Label>Alimentos que deverão ser preparados</Label>{!novoPlano.produto_id ? <p className="mt-2 text-xs text-muted-foreground">Escolha primeiro o produto.</p> : insumosPreparo.length === 0 ? <p className="mt-2 text-xs text-amber-600">Este produto ainda não possui insumos vinculados à receita.</p> : <div className="mt-2 grid gap-2 sm:grid-cols-2">{insumosPreparo.map((insumo) => <label key={insumo.id} className="flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-2.5 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={preparo.insumo_ids.includes(insumo.id)} onChange={() => alternarInsumoPreparo(insumo.id)} /><span>{insumo.nome}</span></label>)}</div>}</div>
+                    <div><Label>Colaborador responsável</Label><select className={selectClass + " mt-2"} value={preparo.responsavel_id} onChange={(e) => setPreparo((atual) => ({ ...atual, responsavel_id: e.target.value }))}><option value="">Selecione quem fará o pré-preparo</option>{colaboradoresAtivos.map((colaborador) => <option key={colaborador.id} value={colaborador.id}>{colaborador.nome}{colaborador.funcao ? " · " + colaborador.funcao : ""}</option>)}</select></div>
+                    {novoPlano.data_producao && <p className="rounded-lg bg-primary/10 p-3 text-xs text-primary">A tarefa será lançada para {new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(new Date(novoPlano.data_producao + "T12:00:00Z").getTime() - 86400000))}.</p>}
+                  </div>}
+                </div>
+                <Button onClick={adicionarPlano} disabled={saving}><CalendarDays className="size-4" />{preparo.ativo ? "Agendar produção e enviar ao Kanban" : "Lançar no planejamento"}</Button>
               </CardContent>
             </Card>
           </div>
