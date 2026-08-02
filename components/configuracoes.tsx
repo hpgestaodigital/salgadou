@@ -5,6 +5,7 @@ import { Bell, Building2, ImageIcon, Loader2, MessageCircle, Save, Send, Upload,
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { mensagemErroSupabase } from "@/lib/supabase/friendly-error"
+import { getPapel } from "@/lib/auth-roles"
 import { PageHeader } from "@/components/page-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -76,6 +77,7 @@ export function Configuracoes() {
   const [uploading, setUploading] = useState<"logo" | "avatar" | null>(null)
   const [savingAvatar, setSavingAvatar] = useState(false)
   const [evolutionConfigured, setEvolutionConfigured] = useState(false)
+  const [podeAlterarMarca, setPodeAlterarMarca] = useState(false)
 
   useEffect(() => {
     let ativo = true
@@ -100,6 +102,8 @@ export function Configuracoes() {
     supabase.auth.getUser().then(({ data }: { data: { user: import("@supabase/supabase-js").User | null } }) => {
       setUserId(data.user?.id ?? "")
       setAvatarUrl(String(data.user?.user_metadata?.avatar_url ?? ""))
+      const papel = getPapel(data.user)
+      setPodeAlterarMarca(papel === "admin" || papel === "socio")
     })
   }, [supabase])
 
@@ -115,7 +119,8 @@ export function Configuracoes() {
   async function salvar() {
     setSaving(true)
     try {
-      const rows = (Object.keys(values) as Chave[]).map((chave) => ({
+      const chavesSalvar = (Object.keys(values) as Chave[]).filter((chave) => podeAlterarMarca || chave !== "brand_logo_url")
+      const rows = chavesSalvar.map((chave) => ({
         chave,
         valor: values[chave],
         updated_at: new Date().toISOString(),
@@ -360,49 +365,51 @@ export function Configuracoes() {
       </Card>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-heading">
-              <Building2 className="size-5 text-primary" />
-              Marca da empresa
-            </CardTitle>
-            <CardDescription>Use uma URL pública ou envie uma imagem para o logo exibido na barra lateral.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <ImagePreview src={values.brand_logo_url || process.env.NEXT_PUBLIC_BRAND_LOGO_URL || ""} fallback="S" alt="Prévia do logo" />
-            <div className="grid gap-1.5">
-              <Label htmlFor="brand_logo_url">URL da imagem</Label>
-              <Input
-                id="brand_logo_url"
-                type="url"
-                value={values.brand_logo_url}
-                onChange={(e) => setValues({ ...values, brand_logo_url: e.target.value })}
-                placeholder="https://exemplo.com/logo.png"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline">
-                <label className="cursor-pointer">
-                  {uploading === "logo" ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-                  Enviar imagem
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="sr-only"
-                    disabled={uploading !== null}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) uploadImagem(file, "logo")
-                      e.currentTarget.value = ""
-                    }}
-                  />
-                </label>
-              </Button>
-              <Button variant="ghost" onClick={() => setValues({ ...values, brand_logo_url: "" })}>Usar imagem local padrão</Button>
-            </div>
-            <p className="text-xs text-muted-foreground">JPG, PNG ou WebP, até 2 MB. Arquivos usam o bucket público <code>erp-media</code>.</p>
-          </CardContent>
-        </Card>
+        {podeAlterarMarca && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 font-heading">
+                <Building2 className="size-5 text-primary" />
+                Marca da empresa
+              </CardTitle>
+              <CardDescription>Use uma URL pública ou envie uma imagem para o logo exibido na barra lateral.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <ImagePreview src={values.brand_logo_url || process.env.NEXT_PUBLIC_BRAND_LOGO_URL || ""} fallback="S" alt="Prévia do logo" />
+              <div className="grid gap-1.5">
+                <Label htmlFor="brand_logo_url">URL da imagem</Label>
+                <Input
+                  id="brand_logo_url"
+                  type="url"
+                  value={values.brand_logo_url}
+                  onChange={(e) => setValues({ ...values, brand_logo_url: e.target.value })}
+                  placeholder="https://exemplo.com/logo.png"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline">
+                  <label className="cursor-pointer">
+                    {uploading === "logo" ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                    Enviar imagem
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only"
+                      disabled={uploading !== null}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) uploadImagem(file, "logo")
+                        e.currentTarget.value = ""
+                      }}
+                    />
+                  </label>
+                </Button>
+                <Button variant="ghost" onClick={() => setValues({ ...values, brand_logo_url: "" })}>Usar imagem local padrão</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">JPG, PNG ou WebP, até 2 MB. Arquivos usam o bucket público <code>erp-media</code>.</p>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

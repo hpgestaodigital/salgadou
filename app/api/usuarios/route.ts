@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { ADMIN_EMAIL, isAdmin, type Papel } from "@/lib/auth-roles"
+import { ADMIN_EMAIL, getPapel, type Papel } from "@/lib/auth-roles"
 
-async function exigirAdmin() {
+async function exigirGestorAcesso() {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  return { ok: isAdmin(user), user }
+  const papel = getPapel(user)
+  return { ok: papel === "admin" || papel === "socio", user, papel }
 }
 
 function tratarErroServico(e: unknown) {
@@ -26,7 +27,7 @@ function tratarErroServico(e: unknown) {
 }
 
 export async function GET() {
-  const { ok } = await exigirAdmin()
+  const { ok } = await exigirGestorAcesso()
   if (!ok) return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
 
   try {
@@ -53,7 +54,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const { ok } = await exigirAdmin()
+  const { ok } = await exigirGestorAcesso()
   if (!ok) return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
 
   try {
@@ -89,7 +90,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { ok } = await exigirAdmin()
+  const { ok } = await exigirGestorAcesso()
   if (!ok) return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
 
   try {
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
     if (!email || !senha) {
       return NextResponse.json({ error: "E-mail e senha são obrigatórios." }, { status: 400 })
     }
-    if (!["admin", "socio", "colaborador", "juridico"].includes(papel)) {
+    if (!["socio", "colaborador", "juridico"].includes(papel)) {
       return NextResponse.json({ error: "Papel de usuário inválido." }, { status: 400 })
     }
     if (senha.length < 6) {
@@ -135,7 +136,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const { ok, user } = await exigirAdmin()
+  const { ok, user } = await exigirGestorAcesso()
   if (!ok) return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
 
   try {

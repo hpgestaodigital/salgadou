@@ -19,6 +19,7 @@ import {
   MessagesSquare,
   Scale,
   History,
+  Factory,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -27,22 +28,24 @@ import { getNome, getPapel, isAdmin, PAPEL_LABEL, type Papel } from "@/lib/auth-
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js"
 import { useTable } from "@/lib/use-data"
 import type { Configuracao } from "@/lib/types"
+import { carregarPermissoes, type Modulo, type Permissoes } from "@/lib/access-control"
 
 const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/escala", label: "Escala Semanal", icon: CalendarDays },
-  { href: "/kanban", label: "Kanban", icon: KanbanSquare },
-  { href: "/reunioes", label: "Reuniões", icon: MessagesSquare },
-  { href: "/juridico", label: "Jurídico", icon: Scale, roles: ["admin", "socio", "juridico"] as Papel[] },
-  { href: "/historico", label: "Histórico", icon: History },
-  { href: "/pagamentos-fornecedores", label: "Pagto. Fornecedores", icon: Truck },
-  { href: "/pagamentos-motoboys", label: "Pagto. Motoboys", icon: Bike },
-  { href: "/cadastros", label: "Cadastros", icon: Users },
-  { href: "/usuarios", label: "Usuários", icon: ShieldCheck, roles: ["admin"] as Papel[] },
-  { href: "/configuracoes", label: "Configurações", icon: Settings },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, modulo: "dashboard" as Modulo },
+  { href: "/escala", label: "Escala Semanal", icon: CalendarDays, modulo: "escala" as Modulo },
+  { href: "/kanban", label: "Kanban", icon: KanbanSquare, modulo: "kanban" as Modulo },
+  { href: "/reunioes", label: "Reuniões", icon: MessagesSquare, modulo: "reunioes" as Modulo },
+  { href: "/producao", label: "Produção", icon: Factory, modulo: "producao" as const },
+  { href: "/juridico", label: "Jurídico", icon: Scale, modulo: "juridico" as Modulo },
+  { href: "/historico", label: "Histórico", icon: History, modulo: "historico" as Modulo },
+  { href: "/pagamentos-fornecedores", label: "Pagto. Fornecedores", icon: Truck, modulo: "pagamentos_fornecedores" as Modulo },
+  { href: "/pagamentos-motoboys", label: "Pagto. Motoboys", icon: Bike, modulo: "pagamentos_motoboys" as Modulo },
+  { href: "/cadastros", label: "Cadastros", icon: Users, modulo: "cadastros" as Modulo },
+  { href: "/usuarios", label: "Usuários", icon: ShieldCheck, modulo: "usuarios" as Modulo },
+  { href: "/configuracoes", label: "Configurações", icon: Settings, modulo: "configuracoes" as Modulo },
 ]
 
-type SessaoUI = { nome: string; papel: Papel; admin: boolean; avatarUrl: string } | null
+type SessaoUI = { nome: string; papel: Papel; admin: boolean; avatarUrl: string; permissoes: Permissoes } | null
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -61,11 +64,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     supabase.auth.getUser().then(({ data }: { data: { user: import("@supabase/supabase-js").User | null } }) => {
       if (!ativo) return
       const u = data.user
-      setSessao(u ? { nome: getNome(u), papel: getPapel(u), admin: isAdmin(u), avatarUrl: String(u.user_metadata?.avatar_url ?? "") } : null)
+      if (!u) return setSessao(null)
+      carregarPermissoes(u).then((permissoes) => {
+        if (ativo) setSessao({ nome: getNome(u), papel: getPapel(u), admin: isAdmin(u), avatarUrl: String(u.user_metadata?.avatar_url ?? ""), permissoes })
+      })
     })
     const { data: sub } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       const u = session?.user ?? null
-      setSessao(u ? { nome: getNome(u), papel: getPapel(u), admin: isAdmin(u), avatarUrl: String(u.user_metadata?.avatar_url ?? "") } : null)
+      if (!u) return setSessao(null)
+      carregarPermissoes(u).then((permissoes) => setSessao({ nome: getNome(u), papel: getPapel(u), admin: isAdmin(u), avatarUrl: String(u.user_metadata?.avatar_url ?? ""), permissoes }))
     })
     return () => {
       ativo = false
@@ -91,8 +98,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const itens = NAV.filter((item) => {
-    if (sessao?.papel === "juridico") return item.href === "/juridico"
-    return !item.roles || (sessao && item.roles.includes(sessao.papel))
+    if (!sessao) return false
+    if (item.modulo === "producao") {
+      return Boolean(
+        sessao.permissoes.producao_compras ||
+        sessao.permissoes.producao_estoque ||
+        sessao.permissoes.producao_planejamento
+      )
+    }
+    return Boolean(sessao.permissoes[item.modulo])
   })
 
   return (

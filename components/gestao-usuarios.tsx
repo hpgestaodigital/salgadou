@@ -2,7 +2,7 @@
 
 import useSWR from "swr"
 import { useState } from "react"
-import { Loader2, Pencil, Plus, ShieldCheck } from "lucide-react"
+import { KeyRound, Loader2, Pencil, Plus, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/page-header"
 import { ConfirmDeleteButton } from "@/components/confirm-button"
@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { PermissoesUsuarioDialog } from "@/components/permissoes-usuario-dialog"
 
 type UsuarioApi = {
   id: string
@@ -48,6 +49,7 @@ export function GestaoUsuarios() {
   const [editUser, setEditUser] = useState<UsuarioApi | null>(null)
   const [editName, setEditName] = useState("")
   const [savingName, setSavingName] = useState(false)
+  const [accessUser, setAccessUser] = useState<UsuarioApi | null>(null)
 
   function abrirNovo() {
     setForm(vazio)
@@ -115,7 +117,7 @@ export function GestaoUsuarios() {
     <div>
       <PageHeader
         title="Usuários"
-        description="Gerencie o acesso dos sócios e da equipe ao sistema."
+        description="Crie usuários por categoria e personalize quais áreas cada pessoa pode acessar."
         action={
           <Button onClick={abrirNovo} disabled={servicoAdministrativoIndisponivel}>
             <Plus className="size-4" />
@@ -180,6 +182,7 @@ export function GestaoUsuarios() {
                       <TableCell className="text-muted-foreground">{u.criado_em ? formatDate(u.criado_em) : "—"}</TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => setAccessUser(u)} aria-label="Configurar acessos" title="Configurar acessos"><KeyRound className="size-4" /></Button>
                           <Button variant="ghost" size="icon" onClick={() => { setEditUser(u); setEditName(u.nome) }} aria-label="Editar nome do usuário" title="Editar nome do usuário"><Pencil className="size-4" /></Button>
                           {ehAdminPadrao ? (
                             <span className="text-xs text-muted-foreground pr-2">Protegido</span>
@@ -232,7 +235,7 @@ export function GestaoUsuarios() {
               />
             </div>
             <div className="grid gap-1.5 sm:col-span-2">
-              <Label>Papel</Label>
+              <Label>Categoria de acesso</Label>
               <Select value={form.papel} onValueChange={(v) => setForm({ ...form, papel: v as Papel })}>
                 <SelectTrigger>
                   <SelectValue />
@@ -241,9 +244,9 @@ export function GestaoUsuarios() {
                   <SelectItem value="socio">Sócio</SelectItem>
                   <SelectItem value="colaborador">Colaborador</SelectItem>
                   <SelectItem value="juridico">Jurídico</SelectItem>
-                  <SelectItem value="admin">Administrador</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">A categoria já aplica os acessos padrão. Depois você poderá personalizar cada aba.</p>
             </div>
           </div>
           <DialogFooter>
@@ -257,6 +260,7 @@ export function GestaoUsuarios() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <PermissoesUsuarioDialog usuario={accessUser} open={Boolean(accessUser)} onOpenChange={(aberto) => { if (!aberto) setAccessUser(null) }} onSaved={() => mutate()} />
       <Dialog open={Boolean(editUser)} onOpenChange={(aberto) => { if (!aberto) setEditUser(null) }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Editar nome do usuário</DialogTitle></DialogHeader>
