@@ -20,6 +20,7 @@ import {
   Scale,
   History,
   Factory,
+  Landmark,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -36,6 +37,7 @@ const NAV = [
   { href: "/kanban", label: "Kanban", icon: KanbanSquare, modulo: "kanban" as Modulo },
   { href: "/reunioes", label: "Reuniões", icon: MessagesSquare, modulo: "reunioes" as Modulo },
   { href: "/producao", label: "Produção", icon: Factory, modulo: "producao" as const },
+  { href: "/financeiro", label: "Financeiro", icon: Landmark, modulo: "financeiro" as Modulo },
   { href: "/juridico", label: "Jurídico", icon: Scale, modulo: "juridico" as Modulo },
   { href: "/historico", label: "Histórico", icon: History, modulo: "historico" as Modulo },
   { href: "/pagamentos-fornecedores", label: "Pagto. Fornecedores", icon: Truck, modulo: "pagamentos_fornecedores" as Modulo },

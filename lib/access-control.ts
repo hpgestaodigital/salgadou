@@ -8,6 +8,7 @@ export const MODULOS = [
   { key: "kanban", label: "Kanban", href: "/kanban" },
   { key: "reunioes", label: "Reuniões", href: "/reunioes" },
   { key: "juridico", label: "Jurídico", href: "/juridico" },
+  { key: "financeiro", label: "Financeiro", href: "/financeiro" },
   { key: "historico", label: "Histórico", href: "/historico" },
   { key: "pagamentos_fornecedores", label: "Pagto. Fornecedores", href: "/pagamentos-fornecedores" },
   { key: "pagamentos_motoboys", label: "Pagto. Motoboys", href: "/pagamentos-motoboys" },
