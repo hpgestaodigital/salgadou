@@ -4,6 +4,12 @@ import { getPapel, type Papel } from "@/lib/auth-roles"
 
 export const MODULOS = [
   { key: "dashboard", label: "Dashboard", href: "/" },
+  { key: "dashboard_calendario_producao", label: "Calendário da produção", href: "/" },
+  { key: "dashboard_fornecedores", label: "Pagamentos de fornecedores", href: "/" },
+  { key: "dashboard_motoboys", label: "Pagamentos de motoboys", href: "/" },
+  { key: "dashboard_equipe_ativa", label: "Equipe ativa", href: "/" },
+  { key: "dashboard_pendencias_colaboradores", label: "Pendências — Colaboradores", href: "/" },
+  { key: "dashboard_pendencias_socios", label: "Pendências — Sócios", href: "/" },
   { key: "escala", label: "Escala Semanal", href: "/escala" },
   { key: "kanban", label: "Kanban", href: "/kanban" },
   { key: "reunioes", label: "Reuniões", href: "/reunioes" },
@@ -34,15 +40,21 @@ export async function carregarPermissoes(user: User): Promise<Permissoes> {
     ])
 
   if (padraoError || individualError) {
-    if (papel === "admin" || papel === "socio") {
+    if (papel === "admin" || papel === "financeiro" || papel === "socio") {
       return Object.fromEntries(MODULOS.map((item) => [item.key, true])) as Permissoes
     }
     if (papel === "juridico") return { juridico: true }
-    return { dashboard: true, escala: true, kanban: true, reunioes: true }
+    return { dashboard: true, dashboard_calendario_producao: true, dashboard_equipe_ativa: true, dashboard_pendencias_colaboradores: true, dashboard_pendencias_socios: true, escala: true, kanban: true }
   }
 
   const resultado: Permissoes = {}
   for (const item of padrao ?? []) resultado[item.modulo as Modulo] = item.pode_visualizar
   for (const item of individuais ?? []) resultado[item.modulo as Modulo] = item.pode_visualizar
+  if (papel === "colaborador") {
+    resultado.dashboard = true
+    resultado.dashboard_calendario_producao = true
+    resultado.escala = true
+    resultado.kanban = true
+  }
   return resultado
 }

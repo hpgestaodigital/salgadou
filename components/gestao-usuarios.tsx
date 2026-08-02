@@ -242,6 +242,7 @@ export function GestaoUsuarios() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="socio">Sócio</SelectItem>
+                  <SelectItem value="financeiro">Financeiro</SelectItem>
                   <SelectItem value="colaborador">Colaborador</SelectItem>
                   <SelectItem value="juridico">Jurídico</SelectItem>
                 </SelectContent>

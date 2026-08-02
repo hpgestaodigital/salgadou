@@ -103,7 +103,7 @@ export function Configuracoes() {
       setUserId(data.user?.id ?? "")
       setAvatarUrl(String(data.user?.user_metadata?.avatar_url ?? ""))
       const papel = getPapel(data.user)
-      setPodeAlterarMarca(papel === "admin" || papel === "socio")
+      setPodeAlterarMarca(papel === "admin" || papel === "financeiro" || papel === "socio")
     })
   }, [supabase])
 

@@ -4,7 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { ADMIN_EMAIL, getPapel, type Papel } from "@/lib/auth-roles"
 
 const MODULOS = [
-  "dashboard", "escala", "kanban", "reunioes", "juridico", "historico",
+  "dashboard", "dashboard_calendario_producao", "dashboard_fornecedores", "dashboard_motoboys",
+  "dashboard_equipe_ativa", "dashboard_pendencias_colaboradores", "dashboard_pendencias_socios", "escala", "kanban", "reunioes", "juridico", "financeiro", "historico",
   "pagamentos_fornecedores", "pagamentos_motoboys", "cadastros", "usuarios",
   "configuracoes", "producao_compras", "producao_estoque", "producao_planejamento",
 ] as const
@@ -13,7 +14,7 @@ async function exigirGestor() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const papel = getPapel(user)
-  return { ok: Boolean(user && (papel === "admin" || papel === "socio")), user, papel }
+  return { ok: Boolean(user && (papel === "admin" || papel === "financeiro" || papel === "socio")), user, papel }
 }
 
 export async function GET(request: Request) {
@@ -45,6 +46,12 @@ export async function GET(request: Request) {
         return [modulo, individual?.pode_visualizar ?? perfil?.pode_visualizar ?? false]
       }),
     )
+    if (papel === "colaborador") {
+      permissoes.dashboard = true
+      permissoes.dashboard_calendario_producao = true
+      permissoes.escala = true
+      permissoes.kanban = true
+    }
 
     return NextResponse.json({ papel, permissoes, base })
   } catch (error) {
@@ -63,7 +70,7 @@ export async function PUT(request: Request) {
     const papel = String(body?.papel ?? "") as Papel
     const permissoes = body?.permissoes as Record<string, boolean>
 
-    if (!/^[0-9a-f-]{36}$/i.test(usuarioId) || !["socio", "juridico", "colaborador"].includes(papel)) {
+    if (!/^[0-9a-f-]{36}$/i.test(usuarioId) || !["financeiro", "socio", "juridico", "colaborador"].includes(papel)) {
       return NextResponse.json({ error: "Dados de acesso inválidos." }, { status: 400 })
     }
 
@@ -74,10 +81,11 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "O administrador padrão é protegido." }, { status: 400 })
     }
 
+    const acessosMinimos = papel === "colaborador" ? new Set(["dashboard", "dashboard_calendario_producao", "escala", "kanban"]) : new Set<string>()
     const entradas = MODULOS.map((modulo) => ({
       usuario_id: usuarioId,
       modulo,
-      pode_visualizar: Boolean(permissoes?.[modulo]),
+      pode_visualizar: acessosMinimos.has(modulo) || Boolean(permissoes?.[modulo]),
       updated_at: new Date().toISOString(),
     }))
 

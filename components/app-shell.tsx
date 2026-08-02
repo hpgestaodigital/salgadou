@@ -21,6 +21,7 @@ import {
   History,
   Factory,
   Landmark,
+  Presentation,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -44,6 +45,7 @@ const NAV = [
   { href: "/pagamentos-motoboys", label: "Pagto. Motoboys", icon: Bike, modulo: "pagamentos_motoboys" as Modulo },
   { href: "/cadastros", label: "Cadastros", icon: Users, modulo: "cadastros" as Modulo },
   { href: "/usuarios", label: "Usuários", icon: ShieldCheck, modulo: "usuarios" as Modulo },
+  { href: "/demonstracao", label: "Demonstração", icon: Presentation, modulo: "dashboard" as Modulo, adminOnly: true },
   { href: "/configuracoes", label: "Configurações", icon: Settings, modulo: "configuracoes" as Modulo },
 ]
 
@@ -101,6 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const itens = NAV.filter((item) => {
     if (!sessao) return false
+    if ("adminOnly" in item && item.adminOnly && !sessao.admin) return false
     if (item.modulo === "producao") {
       return Boolean(
         sessao.permissoes.producao_compras ||

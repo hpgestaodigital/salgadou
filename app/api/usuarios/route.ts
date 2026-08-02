@@ -9,7 +9,7 @@ async function exigirGestorAcesso() {
     data: { user },
   } = await supabase.auth.getUser()
   const papel = getPapel(user)
-  return { ok: papel === "admin" || papel === "socio", user, papel }
+  return { ok: papel === "admin" || papel === "financeiro" || papel === "socio", user, papel }
 }
 
 function tratarErroServico(e: unknown) {
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
     if (!email || !senha) {
       return NextResponse.json({ error: "E-mail e senha são obrigatórios." }, { status: 400 })
     }
-    if (!["socio", "colaborador", "juridico"].includes(papel)) {
+    if (!["financeiro", "socio", "colaborador", "juridico"].includes(papel)) {
       return NextResponse.json({ error: "Papel de usuário inválido." }, { status: 400 })
     }
     if (senha.length < 6) {

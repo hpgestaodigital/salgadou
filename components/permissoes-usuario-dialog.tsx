@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { Eye, EyeOff, Loader2, LockKeyhole } from "lucide-react"
 import { toast } from "sonner"
 import { MODULOS, type Modulo, type Permissoes } from "@/lib/access-control"
 import { PAPEL_LABEL, type Papel } from "@/lib/auth-roles"
@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type Usuario = { id: string; nome: string; email: string | null; papel: Papel }
+const MODULOS_DASHBOARD = MODULOS.filter((item) => item.key.startsWith("dashboard_"))
+const MODULOS_SECOES = MODULOS.filter((item) => !item.key.startsWith("dashboard_"))
 
 export function PermissoesUsuarioDialog({
   usuario,
@@ -64,6 +66,7 @@ export function PermissoesUsuarioDialog({
   }
 
   function alternar(modulo: Modulo) {
+    if (papel === "colaborador" && ["dashboard", "dashboard_calendario_producao", "escala", "kanban"].includes(modulo)) return
     setPermissoes((atual) => ({ ...atual, [modulo]: !atual[modulo] }))
   }
 
@@ -82,10 +85,16 @@ export function PermissoesUsuarioDialog({
           <div className="grid gap-5">
             <div className="grid gap-1.5">
               <Label>Categoria do usuário</Label>
-              <Select value={papel} onValueChange={(value) => setPapel(value as Papel)}>
+              <Select value={papel} onValueChange={(value) => {
+                const novoPapel = value as Papel
+                setPapel(novoPapel)
+                if (novoPapel === "financeiro") setPermissoes(Object.fromEntries(MODULOS.map((item) => [item.key, true])) as Permissoes)
+                if (novoPapel === "colaborador") setPermissoes((atual) => ({ ...atual, dashboard: true, dashboard_calendario_producao: true, escala: true, kanban: true }))
+              }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="socio">{PAPEL_LABEL.socio}</SelectItem>
+                  <SelectItem value="financeiro">{PAPEL_LABEL.financeiro}</SelectItem>
                   <SelectItem value="juridico">{PAPEL_LABEL.juridico}</SelectItem>
                   <SelectItem value="colaborador">{PAPEL_LABEL.colaborador}</SelectItem>
                 </SelectContent>
@@ -95,23 +104,58 @@ export function PermissoesUsuarioDialog({
               </p>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2">
-              {MODULOS.map((item) => {
-                const liberado = Boolean(permissoes[item.key])
+            <div className="grid gap-2">
+              <div>
+                <h3 className="text-sm font-semibold">Conteúdo do Dashboard</h3>
+                <p className="text-xs text-muted-foreground">Escolha o que este usuário verá na página inicial. “Meu trabalho” permanece visível para mostrar apenas as responsabilidades dele.</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+              {MODULOS_DASHBOARD.map((item) => {
+                const obrigatorio = papel === "colaborador" && item.key === "dashboard_calendario_producao"
+                const liberado = obrigatorio || Boolean(permissoes[item.key])
                 return (
                   <button
                     type="button"
                     key={item.key}
                     onClick={() => alternar(item.key)}
-                    className="flex items-center justify-between gap-3 rounded-xl border p-3 text-left hover:bg-muted/50"
+                    aria-disabled={obrigatorio}
+                    className="flex items-center justify-between gap-3 rounded-xl border p-3 text-left hover:bg-muted/50 aria-disabled:cursor-not-allowed aria-disabled:bg-muted/30"
                   >
                     <span className="text-sm font-medium">{item.label}</span>
                     <span className={liberado ? "text-primary" : "text-muted-foreground"}>
-                      {liberado ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+                      {obrigatorio ? <LockKeyhole className="size-4" aria-label="Acesso mínimo obrigatório" /> : liberado ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
                     </span>
                   </button>
                 )
               })}
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <div>
+                <h3 className="text-sm font-semibold">Acesso às seções</h3>
+                <p className="text-xs text-muted-foreground">Defina em quais áreas do ERP este usuário poderá entrar.</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+              {MODULOS_SECOES.map((item) => {
+                const obrigatorio = papel === "colaborador" && ["dashboard", "escala", "kanban"].includes(item.key)
+                const liberado = obrigatorio || Boolean(permissoes[item.key])
+                return (
+                  <button
+                    type="button"
+                    key={item.key}
+                    onClick={() => alternar(item.key)}
+                    aria-disabled={obrigatorio}
+                    className="flex items-center justify-between gap-3 rounded-xl border p-3 text-left hover:bg-muted/50 aria-disabled:cursor-not-allowed aria-disabled:bg-muted/30"
+                  >
+                    <span className="text-sm font-medium">{item.label}</span>
+                    <span className={liberado ? "text-primary" : "text-muted-foreground"}>
+                      {obrigatorio ? <LockKeyhole className="size-4" aria-label="Acesso mínimo obrigatório" /> : liberado ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+                    </span>
+                  </button>
+                )
+              })}
+              </div>
             </div>
           </div>
         )}

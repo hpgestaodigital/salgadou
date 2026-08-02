@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: auth } = await supabase.auth.getUser()
   const papel = getPapel(auth.user)
-  if (!auth.user || !["admin", "socio", "juridico"].includes(papel)) return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
+  if (!auth.user || !["admin", "financeiro", "socio", "juridico"].includes(papel)) return NextResponse.json({ error: "Acesso negado." }, { status: 403 })
 
   const body = await request.json().catch(() => null)
   const contratoId = String(body?.contrato_id ?? "")

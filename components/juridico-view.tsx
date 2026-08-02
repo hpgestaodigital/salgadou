@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { CheckCircle2, Clock3, Download, FileSignature, FileText, Loader2, MessageCircle, Paperclip, Plus, Scale, ShieldCheck, Sparkles, Upload } from "lucide-react"
+import { CheckCircle2, Clock3, Download, FileSignature, FileText, Loader2, MessageCircle, Paperclip, Plus, Scale, ShieldCheck, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { getPapel, type Papel } from "@/lib/auth-roles"
@@ -50,7 +50,6 @@ export function JuridicoView() {
   const [formSignatario, setFormSignatario] = useState(signatarioVazio)
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
-  const [gerandoExemplo, setGerandoExemplo] = useState(false)
 
   useEffect(() => { supabase.auth.getUser().then(({ data }: { data: { user: import("@supabase/supabase-js").User | null } }) => setPapel(getPapel(data.user))) }, [supabase])
   useEffect(() => { if (!selecionado && contratos[0]) setSelecionado(contratos[0].id) }, [contratos, selecionado])
@@ -59,112 +58,7 @@ export function JuridicoView() {
   const signatariosContrato = useMemo(() => signatarios.filter((s) => s.contrato_id === selecionado), [signatarios, selecionado])
   const lembretesContrato = useMemo(() => lembretes.filter((l) => l.contrato_id === selecionado), [lembretes, selecionado])
   const pendenciasAssinatura = useMemo(() => signatarios.filter((s) => s.status !== "assinado").map((signatario) => ({ signatario, contrato: contratos.find((c) => c.id === signatario.contrato_id) })).filter((item) => item.contrato && ["aprovado", "assinatura_pendente"].includes(item.contrato.status)), [signatarios, contratos])
-  const podeValidar = papel === "admin" || papel === "socio"
-
-  async function gerarExemplosJuridico() {
-    setGerandoExemplo(true)
-    let contratoId: string | null = null
-    let demandaId: string | null = null
-    let documentoId: string | null = null
-    let contratoPath: string | null = null
-    let documentoPath: string | null = null
-    try {
-      const { data: auth } = await supabase.auth.getUser()
-      if (!auth.user) throw new Error("Sua sessão expirou. Entre novamente.")
-      const consultas = await Promise.all([
-        supabase.from("contratos").select("id").ilike("titulo", "[EXEMPLO]%").limit(1),
-        supabase.from("demandas_juridicas").select("id").ilike("titulo", "[EXEMPLO]%").limit(1),
-        supabase.from("documentos_juridicos").select("id").ilike("titulo", "[EXEMPLO]%").limit(1),
-      ])
-      if (consultas.some(({ data }) => data?.length)) {
-        toast.warning("Os exemplos do Jurídico já foram criados.")
-        return
-      }
-      if (consultas.some(({ error }) => error)) throw new Error("Aplique primeiro as atualizações SQL de contratos, documentos e demandas jurídicas.")
-
-      const hoje = new Date()
-      const dataEm = (dias: number) => { const data = new Date(hoje); data.setDate(data.getDate() + dias); return data.toISOString().slice(0, 10) }
-      const pdf = criarPdfExemplo()
-      contratoId = crypto.randomUUID()
-      contratoPath = `contracts/${auth.user.id}/${contratoId}/contrato-exemplo.pdf`
-      const { error: uploadContratoError } = await supabase.storage.from("erp-legal-contracts").upload(contratoPath, pdf, { contentType: "application/pdf", upsert: false })
-      if (uploadContratoError) throw uploadContratoError
-      const responsavel = ativos[0]
-      const { error: contratoError } = await supabase.from("contratos").insert({
-        id: contratoId,
-        titulo: "[EXEMPLO] Contrato de prestação de serviços",
-        tipo: "Prestação de serviços",
-        contraparte: "Empresa Demonstração Ltda.",
-        responsavel_id: responsavel?.id ?? null,
-        responsavel_nome: responsavel?.nome ?? "Equipe Salgadou",
-        status: "assinatura_pendente",
-        vencimento: dataEm(30),
-        observacoes: "Registro fictício criado somente para demonstrar o fluxo de validação dos sócios e assinatura. Não possui valor jurídico.",
-        anexo_path: contratoPath,
-        anexo_nome: "contrato-exemplo.pdf",
-        anexo_mime: "application/pdf",
-        anexo_tamanho: pdf.size,
-      })
-      if (contratoError) throw contratoError
-      const validadores = socios.length ? socios.slice(0, 2).map((s) => ({ contrato_id: contratoId, socio_id: s.id, socio_nome: s.nome, status: "aprovado", observacao: "Aprovação fictícia para demonstração.", validado_em: new Date().toISOString() })) : [{ contrato_id: contratoId, socio_id: null, socio_nome: "Sócio de exemplo", status: "aprovado", observacao: "Aprovação fictícia para demonstração.", validado_em: new Date().toISOString() }]
-      const { error: validacaoError } = await supabase.from("contrato_validacoes").insert(validadores)
-      if (validacaoError) throw validacaoError
-      const { error: signatarioError } = await supabase.from("contrato_signatarios").insert([
-        { contrato_id: contratoId, nome: "Representante da Salgadou", email: "exemplo@salgadou.com.br", status: "assinado", assinado_em: new Date().toISOString() },
-        { contrato_id: contratoId, nome: "Representante da contratada", email: "contato@empresa-exemplo.com.br", whatsapp: "5500000000000", status: "pendente" },
-      ])
-      if (signatarioError) throw signatarioError
-
-      demandaId = crypto.randomUUID()
-      const { error: demandaError } = await supabase.from("demandas_juridicas").insert({
-        id: demandaId,
-        titulo: "[EXEMPLO] Analisar notificação de fornecedor",
-        descricao: "Verificar os prazos indicados na notificação fictícia e orientar o Financeiro sobre a resposta adequada. Este registro serve apenas para demonstrar a fila de demandas.",
-        solicitante_nome: "Equipe Financeira (exemplo)",
-        setor: "Financeiro",
-        prioridade: "alta",
-        status: "em_analise",
-        prazo: dataEm(7),
-        responsavel_id: responsavel?.id ?? null,
-        responsavel_nome: responsavel?.nome ?? "Jurídico",
-      })
-      if (demandaError) throw demandaError
-
-      documentoId = crypto.randomUUID()
-      documentoPath = `documents/${auth.user.id}/${documentoId}/parecer-exemplo.pdf`
-      const { error: uploadDocumentoError } = await supabase.storage.from("erp-legal-contracts").upload(documentoPath, pdf, { contentType: "application/pdf", upsert: false })
-      if (uploadDocumentoError) throw uploadDocumentoError
-      const { error: documentoError } = await supabase.from("documentos_juridicos").insert({
-        id: documentoId,
-        demanda_id: demandaId,
-        titulo: "[EXEMPLO] Parecer sobre renovação contratual",
-        categoria: "Parecer jurídico",
-        descricao: "Documento fictício usado para mostrar como pareceres, procurações, atas e outros arquivos ficam organizados.",
-        data_documento: dataEm(0),
-        referencia: "PARECER-DEMO-001",
-        responsavel_id: responsavel?.id ?? null,
-        responsavel_nome: responsavel?.nome ?? "Jurídico",
-        anexo_path: documentoPath,
-        anexo_nome: "parecer-exemplo.pdf",
-        anexo_mime: "application/pdf",
-        anexo_tamanho: pdf.size,
-      })
-      if (documentoError) throw documentoError
-
-      await Promise.all([mutateContratos(), mutateValidacoes(), mutateSignatarios()])
-      toast.success("Exemplos do Jurídico criados. Todos estão marcados como [EXEMPLO].")
-      window.setTimeout(() => window.location.reload(), 600)
-    } catch (e) {
-      if (documentoId) await supabase.from("documentos_juridicos").delete().eq("id", documentoId)
-      if (documentoPath) await supabase.storage.from("erp-legal-contracts").remove([documentoPath])
-      if (demandaId) await supabase.from("demandas_juridicas").delete().eq("id", demandaId)
-      if (contratoId) await supabase.from("contratos").delete().eq("id", contratoId)
-      if (contratoPath) await supabase.storage.from("erp-legal-contracts").remove([contratoPath])
-      toast.error(e instanceof Error ? e.message : "Não foi possível criar os exemplos.")
-    } finally {
-      setGerandoExemplo(false)
-    }
-  }
+  const podeValidar = papel === "admin" || papel === "financeiro" || papel === "socio"
 
   function validarArquivo(file: File) {
     const tipos = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
@@ -277,7 +171,7 @@ export function JuridicoView() {
   }
 
   return <div>
-    <PageHeader title="Jurídico" description="Contratos, validação dos sócios e acompanhamento de assinaturas em um só lugar." action={<><Button variant="outline" onClick={gerarExemplosJuridico} disabled={gerandoExemplo}>{gerandoExemplo ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}Gerar exemplos</Button><Button onClick={() => setDialogContrato(true)}><Plus className="size-4" />Novo contrato</Button></>} />
+    <PageHeader title="Jurídico" description="Contratos, validação dos sócios e acompanhamento de assinaturas em um só lugar." action={<Button onClick={() => setDialogContrato(true)}><Plus className="size-4" />Novo contrato</Button>} />
     {error && <Card className="mb-5 border-destructive/40"><CardContent className="py-5 text-sm">Aplique a migração <strong>20260801010000_legal_department.sql</strong> no Supabase para habilitar esta área.</CardContent></Card>}
     <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
       <div className="space-y-3">{contratos.length === 0 && !error ? <Card><CardContent className="py-10 text-center"><Scale className="mx-auto mb-3 size-8 text-muted-foreground" /><p className="font-semibold">Nenhum contrato cadastrado</p><p className="mt-1 text-sm text-muted-foreground">Cadastre o primeiro documento do setor jurídico.</p></CardContent></Card> : contratos.map((c) => <button key={c.id} onClick={() => setSelecionado(c.id)} className={`w-full rounded-xl border p-4 text-left transition-colors ${c.id === selecionado ? "border-primary/50 bg-primary/10" : "border-border bg-card hover:bg-muted/50"}`}><div className="flex items-start justify-between gap-2"><p className="font-semibold">{c.titulo}</p><Badge variant="outline">{STATUS[c.status]}</Badge></div><p className="mt-2 text-xs text-muted-foreground">{c.contraparte || "Sem contraparte"}</p>{c.vencimento && <p className="mt-1 text-xs text-muted-foreground">Vence em {new Date(`${c.vencimento}T12:00:00`).toLocaleDateString("pt-BR")}</p>}</button>)}</div>
@@ -302,19 +196,3 @@ export function JuridicoView() {
 }
 
 function Info({ label, value }: { label: string; value: string }) { return <div><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1 text-sm">{value}</p></div> }
-
-function criarPdfExemplo() {
-  const objetos = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
-    "<< /Length 103 >>\nstream\nBT /F1 18 Tf 72 720 Td (DOCUMENTO JURIDICO DE EXEMPLO - SALGADOU) Tj 0 -30 Td /F1 11 Tf (Arquivo ficticio sem valor juridico.) Tj ET\nendstream",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-  ]
-  let conteudo = "%PDF-1.4\n"
-  const offsets = [0]
-  objetos.forEach((objeto, index) => { offsets.push(conteudo.length); conteudo += `${index + 1} 0 obj\n${objeto}\nendobj\n` })
-  const xref = conteudo.length
-  conteudo += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n `).join("\n")}\ntrailer << /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`
-  return new Blob([conteudo], { type: "application/pdf" })
-}

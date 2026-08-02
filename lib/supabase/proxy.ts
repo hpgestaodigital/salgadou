@@ -80,12 +80,16 @@ export async function updateSession(request: NextRequest) {
       for (const item of padrao ?? []) permissoes[item.modulo] = item.pode_visualizar
       for (const item of individuais ?? []) permissoes[item.modulo] = item.pode_visualizar
     } else {
-      const todos = papel === "admin" || papel === "socio"
+      const todos = papel === "admin" || papel === "financeiro" || papel === "socio"
       for (const [modulo] of DESTINOS) permissoes[modulo] = todos
       if (papel === "juridico") permissoes.juridico = true
       if (papel === "colaborador") {
-        for (const modulo of ["dashboard", "escala", "kanban", "reunioes"]) permissoes[modulo] = true
+        for (const modulo of ["dashboard", "escala", "kanban"]) permissoes[modulo] = true
       }
+    }
+
+    if (papel === "colaborador") {
+      for (const modulo of ["dashboard", "escala", "kanban"]) permissoes[modulo] = true
     }
 
     let moduloAtual: string | null = pathname === "/" ? "dashboard" : null

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { ArrowDownCircle, ArrowUpCircle, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, Upload, WalletCards } from "lucide-react"
+import { ArrowDownCircle, ArrowUpCircle, CheckCircle2, ChevronLeft, ChevronRight, FileSpreadsheet, Loader2, ReceiptText, ShoppingBag, Upload, WalletCards } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { lerPlanilhaFinanceira, type PreviaPlanilha, type TipoPlanilha } from "@/lib/financeiro-excel"
@@ -42,6 +42,8 @@ export function FinanceiroView() {
   const [schemaPronto, setSchemaPronto] = useState(true)
   const [competencia, setCompetencia] = useState("todas")
   const [origem, setOrigem] = useState<"todas" | TipoPlanilha>("todas")
+  const [categoria, setCategoria] = useState("todas")
+  const [paginaCustos, setPaginaCustos] = useState(0)
 
   async function carregar() {
     setCarregando(true)
@@ -77,9 +79,11 @@ export function FinanceiroView() {
   }, [existentes, previa])
 
   const competencias = useMemo(() => [...new Set(lancamentos.map((item) => item.competencia))].sort().reverse(), [lancamentos])
-  const filtrados = useMemo(() => lancamentos.filter((item) =>
+  const filtradosBase = useMemo(() => lancamentos.filter((item) =>
     (competencia === "todas" || item.competencia === competencia) && (origem === "todas" || item.origem === origem)
   ), [competencia, lancamentos, origem])
+  const categorias = useMemo(() => [...new Set(filtradosBase.map((item) => item.categoria))].sort((a, b) => a.localeCompare(b, "pt-BR")), [filtradosBase])
+  const filtrados = useMemo(() => filtradosBase.filter((item) => categoria === "todas" || item.categoria === categoria), [categoria, filtradosBase])
   const baseResumo = useMemo(() => {
     const fluxo = filtrados.filter((item) => item.origem === "fluxo_caixa")
     return fluxo.length ? fluxo : filtrados
@@ -87,6 +91,26 @@ export function FinanceiroView() {
   const entradas = baseResumo.filter((item) => item.tipo === "entrada").reduce((soma, item) => soma + Number(item.valor), 0)
   const saidas = baseResumo.filter((item) => item.tipo === "saida").reduce((soma, item) => soma + Number(item.valor), 0)
   const pedidos = baseResumo.reduce((soma, item) => soma + Number(item.pedidos || 0), 0)
+  const diasComPedidos = useMemo(() => filtrados.filter((item) => item.origem === "fluxo_caixa" && item.tipo === "entrada" && Number(item.pedidos) > 0)
+    .sort((a, b) => (a.data_lancamento || "").localeCompare(b.data_lancamento || "")), [filtrados])
+  const vendasComPedidos = diasComPedidos.reduce((soma, item) => soma + Number(item.valor), 0)
+  const mediaPedidosDia = diasComPedidos.length ? pedidos / diasComPedidos.length : 0
+  const ticketMedio = pedidos ? vendasComPedidos / pedidos : 0
+  const maiorDia = diasComPedidos.reduce<Lancamento | null>((maior, item) => !maior || Number(item.pedidos) > Number(maior.pedidos) ? item : maior, null)
+  const custosOrdenados = useMemo(() => {
+    const saidasFiltradas = filtrados.filter((item) => item.tipo === "saida")
+    const gastosDetalhados = saidasFiltradas.filter((item) => item.origem === "gastos")
+    const fonte = origem === "todas" && gastosDetalhados.length ? gastosDetalhados : saidasFiltradas
+    return [...fonte].sort((a, b) => Number(b.valor) - Number(a.valor))
+  }, [filtrados, origem])
+  const totalPaginasCustos = Math.max(1, Math.ceil(custosOrdenados.length / 5))
+  const maioresCustos = custosOrdenados.slice(paginaCustos * 5, paginaCustos * 5 + 5)
+
+  useEffect(() => {
+    if (categoria !== "todas" && !categorias.includes(categoria)) setCategoria("todas")
+  }, [categoria, categorias])
+
+  useEffect(() => { setPaginaCustos(0) }, [categoria, competencia, origem])
 
   async function selecionarArquivo(event: React.ChangeEvent<HTMLInputElement>, tipo: TipoPlanilha) {
     const arquivo = event.target.files?.[0]
@@ -145,6 +169,13 @@ export function FinanceiroView() {
     <div className="space-y-7">
       <PageHeader title="Financeiro" description="Concentre os principais números sem abandonar as planilhas que o financeiro já utiliza." />
 
+      <Card className="border-primary/20 bg-primary/[0.025]">
+        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="font-medium">Período da análise</p><p className="text-sm text-muted-foreground">Este filtro atualiza todos os indicadores e detalhes abaixo.</p></div>
+          <div className="w-full sm:w-64"><Label className="mb-1.5">Mês selecionado</Label><Select value={competencia} onValueChange={(valor) => valor && setCompetencia(valor)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todas">Todos os meses</SelectItem>{competencias.map((item) => <SelectItem key={item} value={item}>{mesAno.format(new Date(`${item}T00:00:00Z`))}</SelectItem>)}</SelectContent></Select></div>
+        </CardContent>
+      </Card>
+
       {!schemaPronto && <Card className="border-amber-500/35 bg-amber-500/5"><CardContent className="py-4 text-sm text-amber-100">
         A tela está pronta para demonstração e leitura dos arquivos. Para salvar, aplique a nova migração do Financeiro no Supabase.
       </CardContent></Card>}
@@ -155,6 +186,46 @@ export function FinanceiroView() {
         <StatCard label="Saldo" value={moeda.format(entradas - saidas)} hint="Entradas menos saídas" icon={WalletCards} tone={entradas - saidas >= 0 ? "primary" : "warning"} />
         <StatCard label="Pedidos" value={pedidos.toLocaleString("pt-BR")} hint="Pedidos informados no fluxo de caixa" icon={FileSpreadsheet} />
       </div>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><ShoppingBag className="size-5 text-primary" />Detalhamento dos pedidos</CardTitle>
+            <p className="text-sm text-muted-foreground">Indicadores diários calculados a partir do Fluxo de Caixa no período selecionado.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <ResumoCompacto label="Total" valor={pedidos.toLocaleString("pt-BR")} />
+              <ResumoCompacto label="Média por dia" valor={mediaPedidosDia.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} />
+              <ResumoCompacto label="Ticket médio" valor={moeda.format(ticketMedio)} />
+              <ResumoCompacto label="Dia de maior movimento" valor={maiorDia?.data_lancamento ? new Date(`${maiorDia.data_lancamento}T00:00:00Z`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" }) : "—"} detalhe={maiorDia ? `${Number(maiorDia.pedidos).toLocaleString("pt-BR")} pedidos` : undefined} />
+            </div>
+            {diasComPedidos.length ? <div className="max-h-72 overflow-auto rounded-xl border border-border/70">
+              <Table><TableHeader><TableRow><TableHead>Dia</TableHead><TableHead className="text-right">Pedidos</TableHead><TableHead className="text-right">Vendas</TableHead><TableHead className="text-right">Ticket médio</TableHead></TableRow></TableHeader>
+                <TableBody>{diasComPedidos.map((item) => <TableRow key={`pedido-${item.id}`}><TableCell>{item.data_lancamento ? new Date(`${item.data_lancamento}T00:00:00Z`).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : item.aba_origem}</TableCell><TableCell className="text-right font-medium">{Number(item.pedidos).toLocaleString("pt-BR")}</TableCell><TableCell className="text-right">{moeda.format(Number(item.valor))}</TableCell><TableCell className="text-right text-muted-foreground">{moeda.format(Number(item.valor) / Number(item.pedidos))}</TableCell></TableRow>)}</TableBody>
+              </Table>
+            </div> : <EstadoAnaliseVazio texto="Não há pedidos informados para os filtros selecionados." />}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><ReceiptText className="size-5 text-amber-300" />Maiores custos</CardTitle>
+            <p className="text-sm text-muted-foreground">Quando as duas planilhas estão selecionadas, usamos a planilha de Gastos para evitar valores duplicados.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {maioresCustos.length ? <ol className="space-y-3">{maioresCustos.map((item, indice) => <li key={`gasto-${item.id}`} className="flex items-start gap-3 rounded-xl border border-border/70 p-3.5">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-amber-500/10 text-sm font-bold text-amber-300">{paginaCustos * 5 + indice + 1}</span>
+              <div className="min-w-0 flex-1"><p className="truncate font-medium">{item.descricao}</p><p className="mt-1 text-xs text-muted-foreground">{item.categoria} · {item.data_lancamento ? new Date(`${item.data_lancamento}T00:00:00Z`).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : `Planilha ${item.aba_origem}`}</p></div>
+              <strong className="shrink-0 text-amber-300">{moeda.format(Number(item.valor))}</strong>
+            </li>)}</ol> : <EstadoAnaliseVazio texto="Não há gastos para os filtros selecionados." />}
+            {custosOrdenados.length > 5 && <div className="flex items-center justify-between border-t border-border/70 pt-4">
+              <p className="text-xs text-muted-foreground">{paginaCustos * 5 + 1}–{Math.min((paginaCustos + 1) * 5, custosOrdenados.length)} de {custosOrdenados.length} custos</p>
+              <div className="flex items-center gap-2"><Button type="button" variant="outline" size="icon" aria-label="Ver custos anteriores" disabled={paginaCustos === 0} onClick={() => setPaginaCustos((pagina) => Math.max(0, pagina - 1))}><ChevronLeft /></Button><span className="min-w-16 text-center text-xs text-muted-foreground">{paginaCustos + 1} de {totalPaginasCustos}</span><Button type="button" variant="outline" size="icon" aria-label="Ver próximos custos" disabled={paginaCustos >= totalPaginasCustos - 1} onClick={() => setPaginaCustos((pagina) => Math.min(totalPaginasCustos - 1, pagina + 1))}><ChevronRight /></Button></div>
+            </div>}
+          </CardContent>
+        </Card>
+      </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <ImportCard tipo="fluxo_caixa" titulo="Fluxo de Caixa" descricao="Lê vendas diárias, pedidos, entradas e despesas consolidadas." analisando={analisando} onChange={selecionarArquivo} />
@@ -182,8 +253,8 @@ export function FinanceiroView() {
         <CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div><CardTitle>Lançamentos reconhecidos</CardTitle><p className="mt-1 text-sm text-muted-foreground">O resumo usa o Fluxo de Caixa como fonte principal e a planilha de Gastos como detalhamento.</p></div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div><Label className="mb-1.5">Período</Label><Select value={competencia} onValueChange={(valor) => valor && setCompetencia(valor)}><SelectTrigger className="min-w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todas">Todos os meses</SelectItem>{competencias.map((item) => <SelectItem key={item} value={item}>{mesAno.format(new Date(`${item}T00:00:00Z`))}</SelectItem>)}</SelectContent></Select></div>
             <div><Label className="mb-1.5">Origem</Label><Select value={origem} onValueChange={(valor) => setOrigem(valor as typeof origem)}><SelectTrigger className="min-w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todas">As duas planilhas</SelectItem><SelectItem value="fluxo_caixa">Fluxo de Caixa</SelectItem><SelectItem value="gastos">Gastos detalhados</SelectItem></SelectContent></Select></div>
+            <div><Label className="mb-1.5">Categoria</Label><Select value={categoria} onValueChange={(valor) => valor && setCategoria(valor)}><SelectTrigger className="min-w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todas">Todas as categorias</SelectItem>{categorias.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
           </div>
         </CardHeader>
         <CardContent>
@@ -204,3 +275,11 @@ function ImportCard({ tipo, titulo, descricao, analisando, onChange }: { tipo: T
 }
 
 function PreviaNumero({ label, valor }: { label: string; valor: number }) { return <div className="rounded-xl border border-border/70 bg-background/60 p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-heading text-2xl font-bold">{valor.toLocaleString("pt-BR")}</p></div> }
+
+function ResumoCompacto({ label, valor, detalhe }: { label: string; valor: string; detalhe?: string }) {
+  return <div className="rounded-xl border border-border/70 bg-background/40 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 truncate font-heading text-lg font-bold">{valor}</p>{detalhe && <p className="mt-0.5 text-xs text-muted-foreground">{detalhe}</p>}</div>
+}
+
+function EstadoAnaliseVazio({ texto }: { texto: string }) {
+  return <div className="rounded-xl border border-dashed border-border/80 px-4 py-10 text-center text-sm text-muted-foreground">{texto}</div>
+}

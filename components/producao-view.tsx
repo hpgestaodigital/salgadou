@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Package, Plus, ShoppingCart, Sparkles } from "lucide-react"
+import { CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Package, Plus, ShoppingCart, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { carregarPermissoes, type Permissoes } from "@/lib/access-control"
 import { isSocio, type Colaborador } from "@/lib/types"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,9 +18,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 type Insumo = { id: string; nome: string; unidade: string; estoque_atual: number; estoque_minimo: number; ativo: boolean }
 type Produto = { id: string; nome: string; unidade: string; ativo: boolean }
 type Receita = { produto_id: string; insumo_id: string; quantidade_por_unidade: number }
-type Plano = { id: string; data_producao: string; produto_id: string; quantidade: number; status: string; observacoes: string | null }
+type Plano = { id: string; data_producao: string; produto_id: string; quantidade: number; status: string; observacoes: string | null; pre_preparo_necessario: boolean; pre_preparo_tarefa_id: string | null; pre_preparo_status: "nao_realizado" | "em_andamento" | "concluido"; quantidade_produzida: number | null; caixas_produzidas: number | null; caixas_empacotadas: number | null; porcoes_empacotadas: number | null; concluido_em: string | null; observacoes_fechamento: string | null }
 type Necessidade = { data_producao: string; insumo_id: string; insumo: string; unidade: string; quantidade_necessaria: number; estoque_atual: number; quantidade_a_comprar: number }
-type Compra = { id: string; insumo_id: string; data_necessidade: string | null; quantidade_necessaria: number; quantidade_comprada: number; status: string; observacoes: string | null }
+type Compra = { id: string; insumo_id: string; data_necessidade: string | null; quantidade_necessaria: number; quantidade_comprada: number; status: string; observacoes: string | null; origem_automatica?: boolean }
+type Consumo = { planejamento_id: string; insumo_id: string; quantidade_planejada: number; quantidade_utilizada: number }
+type EstoqueFinal = { produto_id: string; caixas_congeladas: number; porcoes_empacotadas: number; updated_at: string }
+type ReservaInsumo = { planejamento_id: string; insumo_id: string; quantidade_reservada: number; data_producao: string }
 
 const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
 
@@ -29,7 +33,6 @@ export function ProducaoView() {
   const [permissoes, setPermissoes] = useState<Permissoes>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [gerandoExemplo, setGerandoExemplo] = useState(false)
   const [insumos, setInsumos] = useState<Insumo[]>([])
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [receitas, setReceitas] = useState<Receita[]>([])
@@ -37,6 +40,9 @@ export function ProducaoView() {
   const [necessidades, setNecessidades] = useState<Necessidade[]>([])
   const [compras, setCompras] = useState<Compra[]>([])
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
+  const [consumosRegistrados, setConsumosRegistrados] = useState<Consumo[]>([])
+  const [estoqueFinal, setEstoqueFinal] = useState<EstoqueFinal[]>([])
+  const [reservasInsumos, setReservasInsumos] = useState<ReservaInsumo[]>([])
 
   const [novoInsumo, setNovoInsumo] = useState({ nome: "", unidade: "kg", estoque_atual: "", estoque_minimo: "" })
   const [novoProduto, setNovoProduto] = useState({ nome: "", unidade: "un" })
@@ -46,6 +52,11 @@ export function ProducaoView() {
   const [mesCalendario, setMesCalendario] = useState(new Date(hoje.getFullYear(), hoje.getMonth(), 1))
   const [diaSelecionado, setDiaSelecionado] = useState(hoje.toISOString().slice(0, 10))
   const [preparo, setPreparo] = useState({ ativo: false, insumo_ids: [] as string[], responsavel_id: "" })
+  const [fechamentoPlanoId, setFechamentoPlanoId] = useState<string | null>(null)
+  const [fechamento, setFechamento] = useState({ quantidade_produzida: "", caixas_produzidas: "", observacoes: "", consumos: {} as Record<string, string> })
+  const [empacotamentoPlanoId, setEmpacotamentoPlanoId] = useState<string | null>(null)
+  const [empacotamento, setEmpacotamento] = useState({ caixas: "", porcoes: "", observacoes: "" })
+  const [abaAtiva, setAbaAtiva] = useState("")
 
   const abas = useMemo(() => {
     const lista: string[] = []
@@ -76,9 +87,12 @@ export function ProducaoView() {
 
   const planosSelecionados = planosPorData[diaSelecionado] || []
   const colaboradoresAtivos = colaboradores.filter((p) => p.ativo && !isSocio(p))
+  const insumosAtivos = insumos.filter((item) => item.ativo)
+  const comprasAutomaticas = compras.filter((item) => item.origem_automatica)
+  const comprasAnteriores = compras.filter((item) => !item.origem_automatica)
   const insumosPreparo = useMemo(() => {
     const ids = new Set(receitas.filter((r) => r.produto_id === novoPlano.produto_id).map((r) => r.insumo_id))
-    return insumos.filter((i) => ids.has(i.id))
+    return insumos.filter((i) => i.ativo && ids.has(i.id))
   }, [insumos, receitas, novoPlano.produto_id])
   const tituloMes = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(mesCalendario)
 
@@ -106,6 +120,9 @@ export function ProducaoView() {
       supabase.from("producao_necessidades").select("*").order("data_producao"),
       supabase.from("producao_lista_compras").select("*").order("data_necessidade"),
       supabase.from("colaboradores").select("*").eq("ativo", true).order("nome"),
+      supabase.from("producao_consumos").select("*"),
+      supabase.from("producao_estoque_final").select("*").order("updated_at", { ascending: false }),
+      supabase.from("producao_reservas_insumos").select("*").order("data_producao"),
     ])
     const primeiroErro = consultas.find((item) => item.error)?.error
     if (primeiroErro) toast.error("Não foi possível carregar os dados da Produção.")
@@ -116,6 +133,9 @@ export function ProducaoView() {
     setNecessidades((consultas[4].data ?? []) as Necessidade[])
     setCompras((consultas[5].data ?? []) as Compra[])
     setColaboradores((consultas[6].data ?? []) as Colaborador[])
+    setConsumosRegistrados((consultas[7].data ?? []) as Consumo[])
+    setEstoqueFinal((consultas[8].data ?? []) as EstoqueFinal[])
+    setReservasInsumos((consultas[9].data ?? []) as ReservaInsumo[])
     setLoading(false)
   }
 
@@ -197,7 +217,7 @@ export function ProducaoView() {
     setSaving(true)
     let planoId: string | null = null
     try {
-      const { data: plano, error: planoError } = await supabase.from("producao_planejamento").insert({ data_producao: novoPlano.data_producao, produto_id: novoPlano.produto_id, quantidade: Number(novoPlano.quantidade), observacoes: novoPlano.observacoes || null }).select("id").single()
+      const { data: plano, error: planoError } = await supabase.from("producao_planejamento").insert({ data_producao: novoPlano.data_producao, produto_id: novoPlano.produto_id, quantidade: Number(novoPlano.quantidade), observacoes: novoPlano.observacoes || null, pre_preparo_necessario: preparo.ativo }).select("id").single()
       if (planoError) throw planoError
       planoId = plano.id
       if (preparo.ativo && responsavel) {
@@ -208,6 +228,8 @@ export function ProducaoView() {
           contexto: "colaboradores", responsavel_id: responsavel.id, responsavel_nome: responsavel.nome, status: "nao_realizado", prazo: dataPreparoISO,
         }).select("id").single()
         if (tarefaError) throw tarefaError
+        const { error: vinculoError } = await supabase.from("producao_planejamento").update({ pre_preparo_tarefa_id: tarefa.id, pre_preparo_status: "nao_realizado" }).eq("id", plano.id)
+        if (vinculoError) throw vinculoError
         void fetch("/api/notifications/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipo: "tarefa", id: tarefa.id }) }).catch(() => undefined)
       }
       toast.success(preparo.ativo ? "Produção e pré-preparo enviados ao Kanban." : "Produção planejada.")
@@ -220,81 +242,123 @@ export function ProducaoView() {
     } finally { setSaving(false) }
   }
 
-  async function gerarExemploProducao() {
-    setGerandoExemplo(true)
-    const idsInsumos = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()]
-    const produtoId = crypto.randomUUID()
-    const planoIds = [crypto.randomUUID(), crypto.randomUUID()]
-    let criouDados = false
+  async function excluirInsumo(insumo: Insumo) {
+    if (!window.confirm(`Excluir “${insumo.nome}”?\n\nReceitas, reservas e compras dependentes serão removidas. Se já houver consumo registrado, o insumo será arquivado para preservar o histórico. Esta ação ficará registrada no Histórico do ERP.`)) return
+    setSaving(true)
     try {
-      const { data: existentes, error: consultaError } = await supabase.from("producao_produtos").select("id").ilike("nome", "[EXEMPLO]%").limit(1)
-      if (consultaError) throw consultaError
-      if (existentes?.length) {
-        toast.warning("Os exemplos da Produção já foram criados.")
-        return
-      }
-      const dataEm = (dias: number) => {
-        const data = new Date()
-        data.setDate(data.getDate() + dias)
-        return data.toISOString().slice(0, 10)
-      }
-      const dataProducao = dataEm(2)
-      const segundaData = dataEm(5)
-      const { error: insumosError } = await supabase.from("producao_insumos").insert([
-        { id: idsInsumos[0], nome: "[EXEMPLO] Massa de mandioca", unidade: "kg", estoque_atual: 2, estoque_minimo: 5 },
-        { id: idsInsumos[1], nome: "[EXEMPLO] Queijo", unidade: "kg", estoque_atual: 1, estoque_minimo: 2 },
-        { id: idsInsumos[2], nome: "[EXEMPLO] Embalagem", unidade: "un", estoque_atual: 20, estoque_minimo: 100 },
-      ])
-      if (insumosError) throw insumosError
-      criouDados = true
-      const { error: produtoError } = await supabase.from("producao_produtos").insert({
-        id: produtoId, nome: "[EXEMPLO] Salgado de mandioca com queijo", unidade: "un",
-      })
-      if (produtoError) throw produtoError
-      const { error: receitasError } = await supabase.from("producao_receitas").insert([
-        { produto_id: produtoId, insumo_id: idsInsumos[0], quantidade_por_unidade: 0.05 },
-        { produto_id: produtoId, insumo_id: idsInsumos[1], quantidade_por_unidade: 0.02 },
-        { produto_id: produtoId, insumo_id: idsInsumos[2], quantidade_por_unidade: 1 },
-      ])
-      if (receitasError) throw receitasError
-      const { error: planosError } = await supabase.from("producao_planejamento").insert([
-        { id: planoIds[0], data_producao: dataProducao, produto_id: produtoId, quantidade: 100, observacoes: "[EXEMPLO] Produção para demonstrar o cálculo automático dos insumos." },
-        { id: planoIds[1], data_producao: segundaData, produto_id: produtoId, quantidade: 50, observacoes: "[EXEMPLO] Segundo lote exibido no calendário mensal." },
-      ])
-      if (planosError) throw planosError
-      const { error: compraError } = await supabase.from("producao_lista_compras").insert({
-        insumo_id: idsInsumos[0], data_necessidade: dataProducao, quantidade_necessaria: 3,
-        observacoes: "[EXEMPLO] Item gerado para demonstrar a lista de compras.",
-      })
-      if (compraError) throw compraError
+      const { data, error } = await supabase.rpc("excluir_insumo_producao", { insumo_id_param: insumo.id })
+      if (error) throw error
+      toast.success(data === "arquivado" ? "Insumo arquivado; o histórico de consumo foi preservado." : "Insumo e dependências operacionais excluídos.")
       await carregar()
-      setMesCalendario(new Date(dataProducao + "T12:00:00"))
-      setDiaSelecionado(dataProducao)
-      toast.success("Exemplo completo criado. Confira compras, estoque e calendário.")
-    } catch (e) {
-      if (criouDados) {
-        await supabase.from("producao_lista_compras").delete().eq("insumo_id", idsInsumos[0])
-        await supabase.from("producao_planejamento").delete().in("id", planoIds)
-        await supabase.from("producao_receitas").delete().eq("produto_id", produtoId)
-        await supabase.from("producao_produtos").delete().eq("id", produtoId)
-        await supabase.from("producao_insumos").delete().in("id", idsInsumos)
-      }
-      toast.error(e instanceof Error ? e.message : "Não foi possível criar os exemplos da Produção.")
-    } finally {
-      setGerandoExemplo(false)
-    }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível excluir o insumo.")
+    } finally { setSaving(false) }
   }
 
-  async function enviarParaCompras(item: Necessidade) {
-    if (item.quantidade_a_comprar <= 0) return
-    await executar(
-      () => supabase.from("producao_lista_compras").insert({
-        insumo_id: item.insumo_id, data_necessidade: item.data_producao,
-        quantidade_necessaria: item.quantidade_a_comprar,
-        observacoes: "Gerado automaticamente pelo planejamento da produção.",
-      }),
-      "Item adicionado à lista de compras.",
-    )
+  async function excluirCompra(compra: Compra) {
+    const insumo = insumos.find((item) => item.id === compra.insumo_id)
+    const origem = compra.origem_automatica ? "Esta compra foi calculada automaticamente e poderá reaparecer se a falta de estoque continuar." : "Este é um lançamento manual ou anterior."
+    if (!window.confirm(`Excluir a compra de ${insumo?.nome || "insumo"}?\n\n${origem}\nA exclusão ficará registrada no Histórico do ERP.`)) return
+    setSaving(true)
+    try {
+      const { error } = await supabase.from("producao_lista_compras").delete().eq("id", compra.id)
+      if (error) throw error
+      toast.success("Item removido da lista de compras.")
+      await carregar()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível excluir a compra.")
+    } finally { setSaving(false) }
+  }
+
+  async function alterarPrePreparo(plano: Plano, concluido: boolean) {
+    setSaving(true)
+    try {
+      const { error } = await supabase.rpc("definir_status_pre_preparo", {
+        planejamento_id_param: plano.id,
+        status_param: concluido ? "concluido" : "nao_realizado",
+      })
+      if (error) throw error
+      toast.success(concluido ? "Pré-preparo concluído e Kanban atualizado." : "Check desfeito e tarefa reaberta no Kanban.")
+      await carregar()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar o pré-preparo.")
+    } finally { setSaving(false) }
+  }
+
+  function abrirFechamento(plano: Plano) {
+    const consumos = Object.fromEntries(receitas.filter((item) => item.produto_id === plano.produto_id).map((item) => [item.insumo_id, String(Number(item.quantidade_por_unidade) * Number(plano.quantidade))]))
+    setFechamentoPlanoId(plano.id)
+    setFechamento({ quantidade_produzida: String(plano.quantidade_produzida ?? plano.quantidade), caixas_produzidas: String(plano.caixas_produzidas ?? ""), observacoes: plano.observacoes_fechamento ?? "", consumos })
+  }
+
+  async function concluirProducao(plano: Plano) {
+    const quantidadeProduzida = Number(fechamento.quantidade_produzida)
+    const caixasProduzidas = Number(fechamento.caixas_produzidas)
+    if (!Number.isFinite(quantidadeProduzida) || quantidadeProduzida < 0) return toast.error("Informe quantas unidades foram produzidas.")
+    if (!Number.isFinite(caixasProduzidas) || caixasProduzidas < 0) return toast.error("Informe quantas caixas renderam.")
+    const itensReceita = receitas.filter((item) => item.produto_id === plano.produto_id)
+    const consumos = itensReceita.map((item) => ({
+      insumo_id: item.insumo_id,
+      quantidade_planejada: Number(item.quantidade_por_unidade) * Number(plano.quantidade),
+      quantidade_utilizada: Number(fechamento.consumos[item.insumo_id] || 0),
+    }))
+    if (consumos.some((item) => !Number.isFinite(item.quantidade_utilizada) || item.quantidade_utilizada < 0)) return toast.error("Confira as quantidades de material utilizado.")
+    setSaving(true)
+    try {
+      const { error } = await supabase.rpc("registrar_saida_maquina", {
+        planejamento_id_param: plano.id,
+        estimativa_unidades_param: quantidadeProduzida,
+        caixas_produzidas_param: caixasProduzidas,
+        observacoes_param: fechamento.observacoes,
+        consumos_param: consumos,
+      })
+      if (error) throw error
+      toast.success("Saída da máquina registrada. Lote aguardando congelamento e empacotamento.")
+      setFechamentoPlanoId(null)
+      await carregar()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível concluir a produção.")
+    } finally { setSaving(false) }
+  }
+
+  function abrirEmpacotamento(plano: Plano) {
+    setEmpacotamentoPlanoId(plano.id)
+    setEmpacotamento({ caixas: String(plano.caixas_empacotadas ?? plano.caixas_produzidas ?? ""), porcoes: String(plano.porcoes_empacotadas ?? ""), observacoes: "" })
+  }
+
+  function abrirEmpacotamentoPeloEstoque(produtoId: string) {
+    const plano = planos
+      .filter((item) => item.produto_id === produtoId && Number(item.caixas_produzidas ?? 0) > Number(item.caixas_empacotadas ?? 0))
+      .sort((a, b) => a.data_producao.localeCompare(b.data_producao))[0]
+    if (!plano) return toast.error("Nenhum lote deste produto está aguardando empacotamento.")
+    setAbaAtiva("planejamento")
+    setDiaSelecionado(plano.data_producao)
+    setMesCalendario(new Date(`${plano.data_producao}T12:00:00`))
+    abrirEmpacotamento(plano)
+    setTimeout(() => document.getElementById("calendario-producao")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100)
+  }
+
+  async function concluirEmpacotamento(plano: Plano) {
+    const caixas = Number(empacotamento.caixas)
+    const porcoes = Number(empacotamento.porcoes)
+    if (!Number.isFinite(caixas) || caixas < 0) return toast.error("Informe quantas caixas foram empacotadas.")
+    if (!Number.isFinite(porcoes) || porcoes < 0) return toast.error("Informe quantas porções renderam.")
+    if (caixas > Number(plano.caixas_produzidas ?? 0)) return toast.error("As caixas empacotadas não podem superar as caixas produzidas.")
+    setSaving(true)
+    try {
+      const { error } = await supabase.rpc("concluir_empacotamento", {
+        planejamento_id_param: plano.id,
+        caixas_empacotadas_param: caixas,
+        porcoes_empacotadas_param: porcoes,
+        observacoes_param: empacotamento.observacoes,
+      })
+      if (error) throw error
+      toast.success("Empacotamento concluído e rendimento final registrado.")
+      setEmpacotamentoPlanoId(null)
+      await carregar()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível concluir o empacotamento.")
+    } finally { setSaving(false) }
   }
 
   if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground"><Loader2 className="mr-2 size-5 animate-spin" />Carregando Produção...</div>
@@ -304,19 +368,7 @@ export function ProducaoView() {
     <div>
       <PageHeader title="Produção" description="Planeje o que será produzido, confira os insumos e organize as compras." />
 
-      <Card className="mb-5 border-primary/30 bg-primary/5">
-        <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
-          <div>
-            <p className="font-semibold">Quer ver o fluxo completo funcionando?</p>
-            <p className="text-sm text-muted-foreground">Crie dados fictícios de produto, receita, estoque, planejamento, necessidades e compras.</p>
-          </div>
-          <Button onClick={gerarExemploProducao} disabled={gerandoExemplo || saving}>
-            {gerandoExemplo ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-            {gerandoExemplo ? "Criando exemplo..." : "Mostrar exemplo completo"}
-          </Button>
-        </CardContent>
-      </Card>
-      <Tabs key={abaInicial} defaultValue={abaInicial}>
+      <Tabs value={abaAtiva || abaInicial} onValueChange={setAbaAtiva}>
         <TabsList className="h-auto flex-wrap justify-start">
           {permissoes.producao_compras && <TabsTrigger value="compras"><ShoppingCart className="size-4" />Lista de compras</TabsTrigger>}
           {permissoes.producao_estoque && <TabsTrigger value="estoque"><Package className="size-4" />Itens em estoque</TabsTrigger>}
@@ -331,21 +383,23 @@ export function ProducaoView() {
               {necessidades.map((item) => (
                 <div key={item.data_producao + item.insumo_id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3">
                   <div><p className="font-semibold">{item.insumo}</p><p className="text-xs text-muted-foreground">{item.data_producao} · Necessário {item.quantidade_necessaria} {item.unidade} · Estoque {item.estoque_atual}</p></div>
-                  <Button size="sm" disabled={item.quantidade_a_comprar <= 0 || saving} onClick={() => enviarParaCompras(item)}>
-                    <Plus className="size-4" /> Comprar {item.quantidade_a_comprar} {item.unidade}
-                  </Button>
+                  {item.quantidade_a_comprar > 0 ? <Badge variant="secondary">Falta prevista: {item.quantidade_a_comprar} {item.unidade}</Badge> : <Badge variant="outline">Estoque suficiente</Badge>}
                 </div>
               ))}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>Lista de compras</CardTitle></CardHeader>
-            <CardContent className="grid gap-2">
+            <CardHeader><CardTitle>Lista de compras</CardTitle><p className="text-sm text-muted-foreground">As compras automáticas são criadas a partir das reservas e do estoque mínimo. Registros antigos permanecem separados para conferência.</p></CardHeader>
+            <CardContent className="grid gap-5">
               {compras.length === 0 && <p className="text-sm text-muted-foreground">Nenhum item pendente.</p>}
-              {compras.map((compra) => {
+              {comprasAutomaticas.length > 0 && <section><div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Compras geradas automaticamente</h3><Badge variant="secondary">{comprasAutomaticas.length} item(ns)</Badge></div><div className="grid gap-2">{comprasAutomaticas.map((compra) => {
                 const insumo = insumos.find((item) => item.id === compra.insumo_id)
-                return <div key={compra.id} className="rounded-xl border p-3"><p className="font-semibold">{insumo?.nome || "Insumo"}</p><p className="text-sm text-muted-foreground">{compra.quantidade_necessaria} {insumo?.unidade} · {compra.status} · necessário em {compra.data_necessidade || "data não definida"}</p></div>
-              })}
+                return <div key={compra.id} className="rounded-xl border border-primary/25 bg-primary/5 p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold">{insumo?.nome || "Insumo"}</p><Badge variant="secondary" className="mt-1">Automática</Badge></div><Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" onClick={() => excluirCompra(compra)} aria-label={`Excluir compra de ${insumo?.nome || "insumo"}`}><Trash2 className="size-4" /></Button></div><p className="mt-1 text-sm text-muted-foreground">Comprar {compra.quantidade_necessaria} {insumo?.unidade} · necessário em {compra.data_necessidade || "data não definida"}</p><p className="mt-1 text-xs text-muted-foreground">Motivo: reserva da produção ou estoque abaixo do mínimo.</p></div>
+              })}</div></section>}
+              {comprasAnteriores.length > 0 && <section><div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Lançamentos anteriores ou manuais</h3><Badge variant="outline">{comprasAnteriores.length} item(ns)</Badge></div><div className="grid gap-2">{comprasAnteriores.map((compra) => {
+                const insumo = insumos.find((item) => item.id === compra.insumo_id)
+                return <div key={compra.id} className="rounded-xl border p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold">{insumo?.nome || "Insumo"}</p><Badge variant="outline" className="mt-1">Manual/anterior</Badge></div><Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" onClick={() => excluirCompra(compra)} aria-label={`Excluir compra de ${insumo?.nome || "insumo"}`}><Trash2 className="size-4" /></Button></div><p className="mt-1 text-sm text-muted-foreground">{compra.quantidade_necessaria} {insumo?.unidade} · {compra.status} · necessário em {compra.data_necessidade || "data não definida"}</p></div>
+              })}</div></section>}
             </CardContent>
           </Card>
         </TabsContent>
@@ -361,7 +415,46 @@ export function ProducaoView() {
             </CardContent>
           </Card>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {insumos.map((item) => <EstoqueCard key={item.id} item={item} onSave={ajustarEstoque} />)}
+            {insumosAtivos.map((item) => <EstoqueCard key={item.id} item={item} reservado={reservasInsumos.filter((reserva) => reserva.insumo_id === item.id).reduce((total, reserva) => total + Number(reserva.quantidade_reservada), 0)} onSave={ajustarEstoque} onDelete={excluirInsumo} />)}
+          </div>
+          <Card>
+            <CardHeader><CardTitle>Insumos reservados para produções</CardTitle><p className="text-sm text-muted-foreground">O material continua no estoque físico, mas já está comprometido com uma produção marcada.</p></CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2">
+              {reservasInsumos.length === 0 && <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground md:col-span-2">Nenhum insumo reservado no momento.</p>}
+              {reservasInsumos.map((reserva) => {
+                const insumo = insumos.find((item) => item.id === reserva.insumo_id)
+                const plano = planos.find((item) => item.id === reserva.planejamento_id)
+                const produto = produtos.find((item) => item.id === plano?.produto_id)
+                return <div key={`${reserva.planejamento_id}-${reserva.insumo_id}`} className="rounded-xl border p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{insumo?.nome || "Insumo"}</p><p className="text-xs text-muted-foreground">Reservado para {produto?.nome || "produção"}</p></div><Badge variant="secondary">{reserva.quantidade_reservada} {insumo?.unidade}</Badge></div><p className="mt-2 text-xs font-medium text-primary">Produção de {new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${reserva.data_producao}T12:00:00Z`))}</p></div>
+              })}
+            </CardContent>
+          </Card>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <Card>
+              <CardHeader><CardTitle>Caixas congeladas por produto</CardTitle><p className="text-sm text-muted-foreground">Produções que já saíram da máquina e ainda aguardam empacotamento.</p></CardHeader>
+              <CardContent className="grid gap-2">
+                {estoqueFinal.filter((item) => Number(item.caixas_congeladas) > 0).length === 0 && <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nenhuma caixa congelada aguardando empacotamento.</p>}
+                {estoqueFinal.filter((item) => Number(item.caixas_congeladas) > 0).map((item) => {
+                  const produto = produtos.find((produtoItem) => produtoItem.id === item.produto_id)
+                  const estimativaUnidades = planos.filter((plano) => plano.produto_id === item.produto_id && Number(plano.caixas_produzidas ?? 0) > Number(plano.caixas_empacotadas ?? 0)).reduce((total, plano) => {
+                    const caixasProduzidas = Number(plano.caixas_produzidas ?? 0)
+                    const caixasRestantes = caixasProduzidas - Number(plano.caixas_empacotadas ?? 0)
+                    return total + (caixasProduzidas > 0 ? Number(plano.quantidade_produzida ?? 0) * (caixasRestantes / caixasProduzidas) : 0)
+                  }, 0)
+                  return <div key={item.produto_id} className="rounded-xl border p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{produto?.nome || "Produto"}</p><p className="mt-1 text-xs font-medium text-sky-400">Congelando · aguardando empacotamento</p></div><Badge variant="secondary" className="shrink-0 text-sm">{item.caixas_congeladas} caixa(s)</Badge></div><p className="mt-2 text-xs text-muted-foreground">Estimativa: {Math.round(estimativaUnidades)} unidades · {item.caixas_congeladas} caixa(s).</p><Button className="mt-3 w-full" size="sm" onClick={() => abrirEmpacotamentoPeloEstoque(item.produto_id)}><Check className="size-4" />Registrar empacotamento</Button></div>
+                })}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle>Porções empacotadas por produto</CardTitle><p className="text-sm text-muted-foreground">Estoque de produto final gerado automaticamente no fechamento do empacotamento.</p></CardHeader>
+              <CardContent className="grid gap-2">
+                {estoqueFinal.filter((item) => Number(item.porcoes_empacotadas) > 0).length === 0 && <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nenhuma porção empacotada registrada.</p>}
+                {estoqueFinal.filter((item) => Number(item.porcoes_empacotadas) > 0).map((item) => {
+                  const produto = produtos.find((produtoItem) => produtoItem.id === item.produto_id)
+                  return <div key={item.produto_id} className="flex items-center justify-between gap-3 rounded-xl border p-3"><div><p className="font-semibold">{produto?.nome || "Produto"}</p><p className="text-xs text-muted-foreground">Produto final empacotado</p></div><Badge className="text-sm">{item.porcoes_empacotadas} porção(ões)</Badge></div>
+                })}
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
@@ -370,10 +463,22 @@ export function ProducaoView() {
             <Card>
               <CardHeader><CardTitle>Produtos e receitas</CardTitle></CardHeader>
               <CardContent className="grid gap-4">
-                <div className="grid grid-cols-[1fr_90px_auto] gap-2"><Input placeholder="Novo produto" value={novoProduto.nome} onChange={(e) => setNovoProduto({ ...novoProduto, nome: e.target.value })} /><Input value={novoProduto.unidade} onChange={(e) => setNovoProduto({ ...novoProduto, unidade: e.target.value })} /><Button onClick={adicionarProduto}>Adicionar</Button></div>
+                <div className="grid gap-2 sm:grid-cols-[1fr_170px_auto]">
+                  <Input placeholder="Novo produto" value={novoProduto.nome} onChange={(e) => setNovoProduto({ ...novoProduto, nome: e.target.value })} />
+                  <select aria-label="Unidade do produto" className={selectClass} value={novoProduto.unidade} onChange={(e) => setNovoProduto({ ...novoProduto, unidade: e.target.value })}>
+                    <option value="un">Unidade (un)</option>
+                    <option value="kg">Quilograma (kg)</option>
+                    <option value="g">Grama (g)</option>
+                    <option value="l">Litro (l)</option>
+                    <option value="ml">Mililitro (ml)</option>
+                    <option value="pct">Pacote (pct)</option>
+                    <option value="cx">Caixa (cx)</option>
+                  </select>
+                  <Button onClick={adicionarProduto}>Adicionar</Button>
+                </div>
                 <div className="grid gap-2 sm:grid-cols-[1fr_1fr_120px_auto]">
                   <select className={selectClass} value={novaReceita.produto_id} onChange={(e) => setNovaReceita({ ...novaReceita, produto_id: e.target.value })}><option value="">Produto</option>{produtos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}</select>
-                  <select className={selectClass} value={novaReceita.insumo_id} onChange={(e) => setNovaReceita({ ...novaReceita, insumo_id: e.target.value })}><option value="">Insumo</option>{insumos.map((i) => <option key={i.id} value={i.id}>{i.nome}</option>)}</select>
+                  <select className={selectClass} value={novaReceita.insumo_id} onChange={(e) => setNovaReceita({ ...novaReceita, insumo_id: e.target.value })}><option value="">Insumo</option>{insumosAtivos.map((i) => <option key={i.id} value={i.id}>{i.nome}</option>)}</select>
                   <Input type="number" step="0.0001" placeholder="Qtd/un" value={novaReceita.quantidade} onChange={(e) => setNovaReceita({ ...novaReceita, quantidade: e.target.value })} />
                   <Button onClick={adicionarReceita}>Vincular</Button>
                 </div>
@@ -401,7 +506,7 @@ export function ProducaoView() {
               </CardContent>
             </Card>
           </div>
-          <Card className="overflow-hidden">
+          <Card id="calendario-producao" className="scroll-mt-6 overflow-hidden">
             <CardHeader className="border-b">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div><CardTitle>Calendário mensal</CardTitle><p className="mt-1 text-sm text-muted-foreground">Selecione um dia para conferir ou programar a produção.</p></div>
@@ -443,7 +548,40 @@ export function ProducaoView() {
                   {planosSelecionados.length === 0 && <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nenhuma produção marcada neste dia.</p>}
                   {planosSelecionados.map((plano) => {
                     const produto = produtos.find((item) => item.id === plano.produto_id)
-                    return <div key={plano.id} className="rounded-lg border bg-background p-3"><p className="font-semibold">{produto?.nome || "Produto"}</p><p className="text-sm text-muted-foreground">{plano.quantidade} {produto?.unidade} · {plano.status}</p>{plano.observacoes && <p className="mt-2 text-xs">{plano.observacoes}</p>}</div>
+                    const receitaDoProduto = receitas.filter((item) => item.produto_id === plano.produto_id)
+                    const consumosDoPlano = consumosRegistrados.filter((item) => item.planejamento_id === plano.id)
+                    const preparoConcluido = plano.pre_preparo_status === "concluido"
+                    return <div key={plano.id} className="rounded-lg border bg-background p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div><p className="font-semibold">{produto?.nome || "Produto"}</p><p className="text-sm text-muted-foreground">Planejado: {plano.quantidade} {produto?.unidade} · {plano.status === "concluido" ? "Concluído" : plano.status === "em_producao" ? "Aguardando empacotamento" : "Planejado"}</p></div>
+                        {plano.status === "concluido" && <CheckCircle2 className="size-5 shrink-0 text-emerald-500" />}
+                      </div>
+                      {plano.pre_preparo_necessario && <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border bg-muted/25 p-2.5 text-sm">
+                        <input type="checkbox" className="mt-0.5 size-4 accent-primary" checked={preparoConcluido} disabled={saving || !plano.pre_preparo_tarefa_id} onChange={(event) => alterarPrePreparo(plano, event.target.checked)} />
+                        <span><span className="block font-semibold">Pré-preparo concluído</span><span className="block text-xs text-muted-foreground">Status atual: {plano.pre_preparo_status === "em_andamento" ? "Em andamento" : preparoConcluido ? "Concluído" : "Não realizado"}. Sincronizado com o Kanban.</span></span>
+                      </label>}
+                      {plano.observacoes && <p className="mt-2 text-xs">{plano.observacoes}</p>}
+                      {plano.status === "concluido" && <div className="mt-3 rounded-lg bg-emerald-500/10 p-3 text-xs"><p className="font-semibold text-emerald-500">Empacotamento concluído: {plano.porcoes_empacotadas ?? 0} porções</p><p className="mt-1">Saída da máquina: aproximadamente {plano.quantidade_produzida ?? 0} unidades em {plano.caixas_produzidas ?? 0} caixas.</p><p>Empacotadas: {plano.caixas_empacotadas ?? 0} caixas.</p>{consumosDoPlano.length > 0 && <div className="mt-2 grid gap-1 border-t border-emerald-500/15 pt-2">{consumosDoPlano.map((consumo) => { const insumo = insumos.find((item) => item.id === consumo.insumo_id); return <p key={consumo.insumo_id}>{insumo?.nome || "Insumo"}: <strong>{consumo.quantidade_utilizada} {insumo?.unidade}</strong> <span className="text-muted-foreground">(previsto {consumo.quantidade_planejada})</span></p> })}</div>}{plano.observacoes_fechamento && <p className="mt-2 text-muted-foreground">{plano.observacoes_fechamento}</p>}</div>}
+                      {plano.status === "planejado" && <Button className="mt-3 w-full" size="sm" onClick={() => abrirFechamento(plano)}><Package className="size-4" />Registrar saída da máquina</Button>}
+                      {plano.status === "em_producao" && <div className="mt-3 grid gap-2"><div className="rounded-lg bg-sky-500/10 p-3 text-xs"><p className="font-semibold text-sky-400">Congelando · aguardando empacotamento</p><p className="mt-1">Estimativa: {plano.quantidade_produzida ?? 0} unidades · {plano.caixas_produzidas ?? 0} caixas.</p></div><Button className="w-full" size="sm" onClick={() => abrirEmpacotamento(plano)}><Check className="size-4" />Registrar empacotamento</Button></div>}
+                      {fechamentoPlanoId === plano.id && plano.status === "planejado" && <div className="mt-3 grid gap-3 rounded-lg border bg-muted/20 p-3">
+                        <div><Label>Estimativa de unidades entregues pela máquina</Label><Input type="number" min="0" step="1" value={fechamento.quantidade_produzida} onChange={(event) => setFechamento((atual) => ({ ...atual, quantidade_produzida: event.target.value }))} /></div>
+                        <div><Label>Quantas caixas renderam</Label><Input type="number" min="0" step="0.001" value={fechamento.caixas_produzidas} onChange={(event) => setFechamento((atual) => ({ ...atual, caixas_produzidas: event.target.value }))} /></div>
+                        <div className="grid gap-2"><Label>Material realmente utilizado</Label>{receitaDoProduto.length === 0 ? <p className="text-xs text-muted-foreground">Este produto ainda não possui uma receita cadastrada.</p> : receitaDoProduto.map((receita) => {
+                          const insumo = insumos.find((item) => item.id === receita.insumo_id)
+                          const planejado = Number(receita.quantidade_por_unidade) * Number(plano.quantidade)
+                          return <div key={receita.insumo_id} className="grid grid-cols-[1fr_110px] items-end gap-2"><div><p className="text-xs font-medium">{insumo?.nome || "Insumo"}</p><p className="text-[11px] text-muted-foreground">Previsto: {planejado} {insumo?.unidade}</p></div><Input aria-label={`Quantidade utilizada de ${insumo?.nome || "insumo"}`} type="number" min="0" step="0.0001" value={fechamento.consumos[receita.insumo_id] ?? ""} onChange={(event) => setFechamento((atual) => ({ ...atual, consumos: { ...atual.consumos, [receita.insumo_id]: event.target.value } }))} /></div>
+                        })}</div>
+                        <div><Label>Observações da saída da máquina</Label><Input placeholder="Perdas, ajustes ou observações" value={fechamento.observacoes} onChange={(event) => setFechamento((atual) => ({ ...atual, observacoes: event.target.value }))} /></div>
+                        <div className="flex gap-2"><Button className="flex-1" size="sm" disabled={saving} onClick={() => concluirProducao(plano)}>{saving ? <Loader2 className="size-4 animate-spin" /> : <Package className="size-4" />}Enviar para congelamento</Button><Button size="sm" variant="outline" onClick={() => setFechamentoPlanoId(null)}>Cancelar</Button></div>
+                      </div>}
+                      {empacotamentoPlanoId === plano.id && plano.status === "em_producao" && <div className="mt-3 grid gap-3 rounded-lg border bg-muted/20 p-3">
+                        <div><Label>Caixas usadas no empacotamento</Label><Input type="number" min="0" max={plano.caixas_produzidas ?? undefined} step="0.001" value={empacotamento.caixas} onChange={(event) => setEmpacotamento((atual) => ({ ...atual, caixas: event.target.value }))} /><p className="mt-1 text-[11px] text-muted-foreground">Disponíveis: {plano.caixas_produzidas ?? 0} caixas congeladas.</p></div>
+                        <div><Label>Quantas porções renderam</Label><Input type="number" min="0" step="1" value={empacotamento.porcoes} onChange={(event) => setEmpacotamento((atual) => ({ ...atual, porcoes: event.target.value }))} /></div>
+                        <div><Label>Observações do empacotamento</Label><Input placeholder="Sobras, perdas ou ajustes" value={empacotamento.observacoes} onChange={(event) => setEmpacotamento((atual) => ({ ...atual, observacoes: event.target.value }))} /></div>
+                        <div className="flex gap-2"><Button className="flex-1" size="sm" disabled={saving} onClick={() => concluirEmpacotamento(plano)}>{saving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}Concluir empacotamento</Button><Button size="sm" variant="outline" onClick={() => setEmpacotamentoPlanoId(null)}>Cancelar</Button></div>
+                      </div>}
+                    </div>
                   })}
                 </div>
               </aside>
@@ -455,14 +593,16 @@ export function ProducaoView() {
   )
 }
 
-function EstoqueCard({ item, onSave }: { item: Insumo; onSave: (item: Insumo, valor: string) => void }) {
+function EstoqueCard({ item, reservado, onSave, onDelete }: { item: Insumo; reservado: number; onSave: (item: Insumo, valor: string) => void; onDelete: (item: Insumo) => void }) {
   const [valor, setValor] = useState(String(item.estoque_atual))
-  const baixo = item.estoque_atual <= item.estoque_minimo
+  const disponivel = Math.max(0, Number(item.estoque_atual) - reservado)
+  const baixo = disponivel <= item.estoque_minimo
   return (
     <Card className={baixo ? "border-amber-500/50" : ""}>
-      <CardHeader className="pb-2"><CardTitle className="text-base">{item.nome}</CardTitle></CardHeader>
+      <CardHeader className="pb-2"><div className="flex items-start justify-between gap-3"><CardTitle className="text-base">{item.nome}</CardTitle><Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" onClick={() => onDelete(item)} aria-label={`Excluir ${item.nome}`}><Trash2 className="size-4" /></Button></div></CardHeader>
       <CardContent>
-        <p className="mb-3 text-xs text-muted-foreground">Mínimo: {item.estoque_minimo} {item.unidade}{baixo ? " · Repor estoque" : ""}</p>
+        <div className="mb-3 grid grid-cols-3 gap-2 rounded-lg bg-muted/30 p-2 text-center text-xs"><div><p className="text-muted-foreground">Físico</p><p className="font-semibold">{item.estoque_atual}</p></div><div><p className="text-muted-foreground">Reservado</p><p className="font-semibold text-amber-400">{reservado}</p></div><div><p className="text-muted-foreground">Disponível</p><p className="font-semibold text-primary">{disponivel}</p></div></div>
+        <p className="mb-3 text-xs text-muted-foreground">Mínimo recomendado: {item.estoque_minimo} {item.unidade}{baixo ? " · Repor estoque" : ""}</p>
         <div className="flex gap-2"><Input type="number" step="0.001" value={valor} onChange={(e) => setValor(e.target.value)} /><Button variant="outline" onClick={() => onSave(item, valor)}>Salvar</Button></div>
       </CardContent>
     </Card>
