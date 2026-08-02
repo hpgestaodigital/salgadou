@@ -96,6 +96,8 @@ export type PagamentoMotoboy = {
   responsavel?: string | null
   anexo_url?: string | null
   anexo_path?: string | null
+  rastreio_anexo_url?: string | null
+  rastreio_anexo_path?: string | null
   created_at: string
 }
 

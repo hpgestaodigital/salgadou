@@ -22,6 +22,7 @@ import {
   Factory,
   Landmark,
   Presentation,
+  Target,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -31,6 +32,7 @@ import type { AuthChangeEvent, Session } from "@supabase/supabase-js"
 import { useTable } from "@/lib/use-data"
 import type { Configuracao } from "@/lib/types"
 import { carregarPermissoes, type Modulo, type Permissoes } from "@/lib/access-control"
+import { GlobalGoalsBar } from "@/components/dashboard-goals"
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, modulo: "dashboard" as Modulo },
@@ -39,6 +41,7 @@ const NAV = [
   { href: "/reunioes", label: "Reuniões", icon: MessagesSquare, modulo: "reunioes" as Modulo },
   { href: "/producao", label: "Produção", icon: Factory, modulo: "producao" as const },
   { href: "/financeiro", label: "Financeiro", icon: Landmark, modulo: "financeiro" as Modulo },
+  { href: "/metas", label: "Metas", icon: Target, modulo: "metas" as Modulo },
   { href: "/juridico", label: "Jurídico", icon: Scale, modulo: "juridico" as Modulo },
   { href: "/historico", label: "Histórico", icon: History, modulo: "historico" as Modulo },
   { href: "/pagamentos-fornecedores", label: "Pagto. Fornecedores", icon: Truck, modulo: "pagamentos_fornecedores" as Modulo },
@@ -156,7 +159,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 xl:p-10 max-w-[1480px] w-full mx-auto">{children}</main>
+        {pathname !== "/" && (
+          <div className="mx-auto w-full max-w-[1480px] px-4 pt-3 sm:px-6 lg:px-8 lg:pt-4 xl:px-10">
+            <GlobalGoalsBar />
+          </div>
+        )}
+        <main className={cn("flex-1 p-4 sm:p-6 lg:p-8 xl:p-10 max-w-[1480px] w-full mx-auto", pathname !== "/" && "pt-4 sm:pt-5 lg:pt-6 xl:pt-6")}>{children}</main>
       </div>
     </div>
   )

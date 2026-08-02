@@ -7,6 +7,7 @@ type Tipo = "fornecedor" | "motoboy" | "tarefa"
 
 const brl = (valor: number | null) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor ?? 0)
 const dataBR = (data: string) => new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${data}T12:00:00Z`))
+const normalizar = (valor: string | null | undefined) => (valor ?? "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
 
 export async function notificarRegistro(tipo: Tipo, id: string, evento: Evento, periodo = "") {
   const db = createAdminClient()
@@ -19,10 +20,13 @@ export async function notificarRegistro(tipo: Tipo, id: string, evento: Evento, 
   const { data: registro, error } = await db.from(tabela).select("*").eq("id", id).single()
   if (error || !registro) return { status: "nao_encontrado" }
   const dedupeKey = `${tipo}:${id}:${evento}:${periodo || new Date().toISOString().slice(0, 10)}`
-  const { data: pessoas } = await db.from("colaboradores").select("nome, whatsapp, tipo, ativo, notificacoes_whatsapp").eq("ativo", true)
+  const { data: pessoas } = await db.from("colaboradores").select("id,nome, whatsapp, tipo, ativo, notificacoes_whatsapp").eq("ativo", true)
   const nomeResponsavel = tipo === "tarefa" ? registro.responsavel_nome : registro.responsavel
-  const responsavel = pessoas?.find((p) => p.nome === nomeResponsavel && p.whatsapp && p.notificacoes_whatsapp)
-  const socios = (pessoas ?? []).filter((p) => p.tipo === "Sócio" && p.whatsapp && p.notificacoes_whatsapp)
+  const responsavel = pessoas?.find((p) =>
+    ((tipo === "tarefa" && registro.responsavel_id && p.id === registro.responsavel_id) || normalizar(p.nome) === normalizar(nomeResponsavel))
+    && p.whatsapp && p.notificacoes_whatsapp,
+  )
+  const socios = (pessoas ?? []).filter((p) => normalizar(p.tipo) === "socio" && p.whatsapp && p.notificacoes_whatsapp)
   const destinos = responsavel ? [responsavel] : socios
   if (!destinos.length) return { status: "sem_destinatario" }
 
@@ -81,13 +85,13 @@ export async function processarNotificacoesAgendadas() {
   const { data: fornecedores } = await db.from("pagamentos_fornecedores").select("id,vencimento,pago_em").is("pago_em", null)
   for (const p of fornecedores ?? []) {
     const evento = p.vencimento < hoje ? "atrasado" : p.vencimento <= ate ? "proximo" : "pendente"
-    await notificarRegistro("fornecedor", p.id, evento, evento === "proximo" ? hoje : periodoSemanal)
+    await notificarRegistro("fornecedor", p.id, evento, evento === "proximo" ? p.vencimento : periodoSemanal)
   }
 
   const { data: motoboys } = await db.from("pagamentos_motoboys").select("id,data,pago_em,total,numero_entregas").is("pago_em", null)
   for (const p of motoboys ?? []) {
     const evento = !p.numero_entregas && !p.total ? "lancamento" : p.data < hoje ? "atrasado" : "pendente"
-    await notificarRegistro("motoboy", p.id, evento, evento === "lancamento" ? hoje : periodoSemanal)
+    await notificarRegistro("motoboy", p.id, evento, periodoSemanal)
   }
   const { data: tarefas } = await db
     .from("kanban_tarefas")
@@ -96,7 +100,7 @@ export async function processarNotificacoesAgendadas() {
     .not("prazo", "is", null)
   for (const tarefa of tarefas ?? []) {
     const evento = tarefa.prazo < hoje ? "atrasado" : tarefa.prazo <= ate ? "proximo" : "pendente"
-    await notificarRegistro("tarefa", tarefa.id, evento, evento === "proximo" ? hoje : periodoSemanal)
+    await notificarRegistro("tarefa", tarefa.id, evento, evento === "proximo" ? tarefa.prazo : periodoSemanal)
   }
   return { fornecedores: fornecedores?.length ?? 0, motoboys: motoboys?.length ?? 0, tarefas: tarefas?.length ?? 0 }
 }

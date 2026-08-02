@@ -16,11 +16,19 @@ export async function enviarEvolution(numero: string, mensagem: string, config?:
   if (process.env.NODE_ENV === "production" && endpointBase.protocol !== "https:") {
     throw new Error("EVOLUTION_HTTPS_REQUIRED")
   }
+  let numeroNormalizado = numero.replace(/\D/g, "")
+  if ((numeroNormalizado.length === 10 || numeroNormalizado.length === 11) && !numeroNormalizado.startsWith("55")) {
+    numeroNormalizado = `55${numeroNormalizado}`
+  }
+  if (numeroNormalizado.length < 12 || numeroNormalizado.length > 15) {
+    throw new Error("EVOLUTION_INVALID_PHONE")
+  }
+  if (!mensagem.trim() || mensagem.length > 4096) throw new Error("EVOLUTION_INVALID_MESSAGE")
 
   const response = await fetch(`${endpointBase.toString().replace(/\/$/, "")}/message/sendText/${encodeURIComponent(instance)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: apiKey },
-    body: JSON.stringify({ number: numero.replace(/\D/g, ""), text: mensagem }),
+    body: JSON.stringify({ number: numeroNormalizado, text: mensagem.trim() }),
     signal: AbortSignal.timeout(15_000),
   })
   if (!response.ok) throw new Error(`EVOLUTION_HTTP_${response.status}`)

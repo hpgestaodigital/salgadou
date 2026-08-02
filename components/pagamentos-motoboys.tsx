@@ -36,6 +36,8 @@ const vazio = {
   responsavel: "",
   anexo_url: "",
   anexo_path: "",
+  rastreio_anexo_url: "",
+  rastreio_anexo_path: "",
 }
 
 type EntregaDraft = {
@@ -154,6 +156,8 @@ export function PagamentosMotoboys() {
       responsavel: p.responsavel ?? "",
       anexo_url: p.anexo_url ?? "",
       anexo_path: p.anexo_path ?? "",
+      rastreio_anexo_url: p.rastreio_anexo_url ?? "",
+      rastreio_anexo_path: p.rastreio_anexo_path ?? "",
     })
     setEntregasForm(
       entregas.filter((entrega) => entrega.pagamento_id === p.id).map((entrega) => ({
@@ -198,6 +202,8 @@ export function PagamentosMotoboys() {
         responsavel: form.responsavel || null,
         anexo_url: form.anexo_path ? null : form.anexo_url || null,
         anexo_path: form.anexo_path || null,
+        rastreio_anexo_url: form.rastreio_anexo_path ? null : form.rastreio_anexo_url || null,
+        rastreio_anexo_path: form.rastreio_anexo_path || null,
       }
       const result = editId
         ? await supabase.from("pagamentos_motoboys").update(payload).eq("id", editId).select("id").single()
@@ -568,6 +574,18 @@ export function PagamentosMotoboys() {
               url={form.anexo_url}
               path={form.anexo_path}
               onChange={(anexo) => setForm({ ...form, anexo_url: anexo.url, anexo_path: anexo.path })}
+              label="Comprovante do pagamento (opcional)"
+              previewAlt="Prévia do comprovante do pagamento"
+              storageFolder="comprovantes"
+            />
+            <PaymentAttachmentField
+              url={form.rastreio_anexo_url}
+              path={form.rastreio_anexo_path}
+              onChange={(anexo) => setForm({ ...form, rastreio_anexo_url: anexo.url, rastreio_anexo_path: anexo.path })}
+              label="Resumo do sistema de rastreio (opcional)"
+              helper="Print com o resumo das entregas no sistema de rastreio · JPG, PNG ou WebP · máximo 2 MB."
+              previewAlt="Prévia do resumo do sistema de rastreio"
+              storageFolder="rastreio"
             />
             <div className="sm:col-span-2 flex items-center justify-between rounded-lg bg-muted px-4 py-3">
               <span className="text-sm font-semibold text-muted-foreground">Total a pagar</span>

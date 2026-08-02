@@ -28,6 +28,7 @@ import { createClient } from "@/lib/supabase/client"
 import { getNome } from "@/lib/auth-roles"
 import { cn } from "@/lib/utils"
 import { DashboardProductionCalendar } from "@/components/dashboard-production-calendar"
+import { DashboardGoals } from "@/components/dashboard-goals"
 import { carregarPermissoes, type Permissoes } from "@/lib/access-control"
 
 type UsuarioVinculo = { usuario_id: string; colaborador_id: string }
@@ -129,6 +130,8 @@ export function Dashboard() {
           "Acompanhe pagamentos, equipe e prioridades da operação."
         }
       />
+
+      <DashboardGoals />
 
       <PersonalTasksCard nome={colaboradorVinculado?.nome || usuarioNome} itens={meuTrabalho} proximosVencimentos={itensProximosVencimentos} contasVencidas={itensContasVencidas} vinculado={Boolean(colaboradorVinculadoId)} prioritarias={meuTrabalhoPrioritario} atrasadas={meuTrabalhoAtrasado} mostrarFinanceiro={exibirFinanceiro} />
 

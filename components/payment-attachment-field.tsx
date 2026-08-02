@@ -11,10 +11,18 @@ export function PaymentAttachmentField({
   url,
   path,
   onChange,
+  label = "Imagem do pagamento (opcional)",
+  helper = "JPG, PNG ou WebP · máximo 2 MB.",
+  previewAlt = "Prévia do anexo do pagamento",
+  storageFolder = "",
 }: {
   url: string
   path: string
   onChange: (value: { url: string; path: string }) => void
+  label?: string
+  helper?: string
+  previewAlt?: string
+  storageFolder?: string
 }) {
   const supabase = createClient()
   const [uploading, setUploading] = useState(false)
@@ -51,7 +59,8 @@ export function PaymentAttachmentField({
       const { data: auth } = await supabase.auth.getUser()
       if (!auth.user) throw new Error("Sessão expirada")
       const ext = file.name.split(".").pop()?.toLowerCase() || "jpg"
-      const storagePath = `payments/${auth.user.id}/${crypto.randomUUID()}.${ext}`
+      const segmento = storageFolder ? `${storageFolder.replace(/[^a-z0-9_-]/gi, "")}/` : ""
+      const storagePath = `payments/${auth.user.id}/${segmento}${crypto.randomUUID()}.${ext}`
       const { error } = await supabase.storage.from("erp-payment-attachments").upload(storagePath, file, { contentType: file.type })
       if (error) throw error
       const { data, error: signedError } = await supabase.storage
@@ -72,9 +81,9 @@ export function PaymentAttachmentField({
 
   return (
     <div className="grid gap-3 rounded-xl border border-border p-4 sm:col-span-2">
-      <Label>Imagem do pagamento (opcional)</Label>
+      <Label>{label}</Label>
       {previewUrl ? (
-        <img src={previewUrl} alt="Prévia do anexo do pagamento" className="h-36 w-full rounded-lg bg-muted object-contain" />
+        <img src={previewUrl} alt={previewAlt} className="h-36 w-full rounded-lg bg-muted object-contain" />
       ) : (
         <div className="grid h-24 place-items-center rounded-lg bg-muted/40 text-muted-foreground"><ImageIcon className="size-7" /></div>
       )}
@@ -96,7 +105,7 @@ export function PaymentAttachmentField({
           onChange({ url: "", path: "" })
         }}><Trash2 className="size-4" />Remover</Button>}
       </div>
-      <p className="text-xs text-muted-foreground">JPG, PNG ou WebP · máximo 2 MB.</p>
+      <p className="text-xs text-muted-foreground">{helper}</p>
     </div>
   )
 }
