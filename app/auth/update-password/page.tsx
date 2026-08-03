@@ -56,6 +56,13 @@ export default function UpdatePasswordPage() {
         setErro("O link é inválido ou expirou. Solicite um novo e-mail de recuperação.")
         return
       }
+
+      const resposta = await fetch("/api/auth/trocar-senha", { method: "POST" })
+      if (!resposta.ok) {
+        setErro("A senha foi alterada, mas não foi possível liberar o acesso. Fale com o administrador.")
+        return
+      }
+
       setConcluido(true)
       await supabase.auth.signOut()
     } catch {
