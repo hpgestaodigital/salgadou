@@ -4,7 +4,6 @@ import { enviarEvolution, evolutionConfigurada } from "@/lib/evolution/server"
 
 const MODULOS_ENVIO = [
   "configuracoes",
-  "escala",
   "pagamentos_fornecedores",
   "pagamentos_motoboys",
 ] as const
@@ -47,7 +46,9 @@ export async function POST(request: Request) {
     for (const item of padrao ?? []) permissoes.set(item.modulo, item.pode_visualizar)
     for (const item of individual ?? []) permissoes.set(item.modulo, item.pode_visualizar)
 
-    if (![...MODULOS_ENVIO].some((modulo) => permissoes.get(modulo) === true)) {
+    const gestorEscala = ["admin", "financeiro", "socio"].includes(papel)
+    const moduloAutorizado = [...MODULOS_ENVIO].some((modulo) => permissoes.get(modulo) === true)
+    if (!gestorEscala && !moduloAutorizado) {
       return NextResponse.json({ error: "Você não tem permissão para enviar mensagens." }, { status: 403 })
     }
 
