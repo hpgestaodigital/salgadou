@@ -39,8 +39,8 @@ export async function POST(request: Request) {
     await enviarEvolution(numero, mensagem, { url, instance })
 
     return NextResponse.json({ ok: true })
-  } catch (e) {
-    console.log("[v0] erro rota whatsapp:", e)
+  } catch (error) {
+    console.error("Erro na rota de envio do WhatsApp:", error)
     return NextResponse.json({ error: "Erro interno ao processar o envio." }, { status: 500 })
   }
 }
