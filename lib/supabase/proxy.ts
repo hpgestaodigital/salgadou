@@ -111,9 +111,23 @@ export async function updateSession(request: NextRequest) {
       for (const item of padrao ?? []) permissoes[item.modulo] = item.pode_visualizar
       for (const item of individuais ?? []) permissoes[item.modulo] = item.pode_visualizar
     } else {
-      const todos = papel === "admin" || papel === "financeiro" || papel === "socio"
-      for (const [modulo] of DESTINOS) permissoes[modulo] = todos
-      if (papel === "juridico") permissoes.juridico = true
+      // Em caso de indisponibilidade da matriz, evita conceder acesso total por perfil.
+      // O administrador mantém acesso de recuperação; os demais recebem apenas o mínimo funcional.
+      const administrador = papel === "admin"
+      for (const [modulo] of DESTINOS) permissoes[modulo] = administrador
+
+      if (papel === "socio") {
+        for (const modulo of ["dashboard", "kanban", "reunioes"]) permissoes[modulo] = true
+      }
+      if (papel === "financeiro") {
+        for (const modulo of ["dashboard", "financeiro", "pagamentos_fornecedores", "pagamentos_motoboys"]) {
+          permissoes[modulo] = true
+        }
+      }
+      if (papel === "juridico") {
+        permissoes.dashboard = true
+        permissoes.juridico = true
+      }
       if (papel === "colaborador") {
         for (const modulo of ["dashboard", "escala", "kanban"]) permissoes[modulo] = true
       }
