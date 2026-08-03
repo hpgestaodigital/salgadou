@@ -25,6 +25,7 @@ import {
   Target,
   ShoppingCart,
   Snowflake,
+  BookOpenText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -42,6 +43,7 @@ const NAV = [
   { href: "/kanban", label: "Kanban", icon: KanbanSquare, modulo: "kanban" as Modulo },
   { href: "/reunioes", label: "Reuniões", icon: MessagesSquare, modulo: "reunioes" as Modulo },
   { href: "/producao", label: "Produção", icon: Factory, modulo: "producao" as const },
+  { href: "/receitas", label: "Ficha Técnica", icon: BookOpenText, modulo: "producao" as const },
   { href: "/estoque-salgadinhos", label: "Estoque de Salgadinhos", icon: Snowflake, modulo: "producao" as const },
   { href: "/mercado", label: "Mercado", icon: ShoppingCart, modulo: "mercado" as Modulo },
   { href: "/financeiro", label: "Leitor de Planilha", icon: Landmark, modulo: "financeiro" as Modulo },
