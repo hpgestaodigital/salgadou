@@ -33,7 +33,7 @@ function chaveLocal(data: Date) {
 
 function formatarData(dataISO: string): string {
   const [ano, mes, dia] = dataISO.split("-").map(Number)
-  const data = new Date(ano, mes - 1, dia, 12, 0, 0)
+  const data = new Date(ano, mes - 1, dia, 0, 0, 0)
   return data.toLocaleDateString("pt-BR", { dateStyle: "long" })
 }
 
