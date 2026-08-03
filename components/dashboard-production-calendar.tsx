@@ -70,9 +70,10 @@ export function DashboardProductionCalendar() {
     return mapa
   }, [planos])
   const selecionados = planosPorDia.get(diaSelecionado) || []
-  const tituloMes = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(mes)
+  const tituloMes = mes ? new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(mes) : ""
 
   function navegar(direcao: number) {
+    if (!mes) return
     const novoMes = new Date(mes.getFullYear(), mes.getMonth() + direcao, 1)
     setMes(novoMes)
     setDiaSelecionado(chaveLocal(novoMes))
