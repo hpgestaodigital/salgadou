@@ -2,10 +2,6 @@
 -- Toda alteração futura de saldo passa a deixar um extrato com saldo anterior,
 -- quantidade movimentada, saldo posterior, origem, motivo e responsável.
 
-alter table public.producao_insumos
-  alter column estoque_atual type numeric(14,4) using estoque_atual::numeric(14,4),
-  alter column estoque_minimo type numeric(14,4) using estoque_minimo::numeric(14,4);
-
 create table if not exists public.producao_estoque_movimentacoes (
   id uuid primary key default gen_random_uuid(),
   insumo_id uuid not null references public.producao_insumos(id) on delete restrict,
@@ -22,9 +18,9 @@ create table if not exists public.producao_estoque_movimentacoes (
     'estorno',
     'perda'
   )),
-  quantidade numeric(14,4) not null check (quantidade <> 0),
-  saldo_anterior numeric(14,4) not null,
-  saldo_posterior numeric(14,4) not null,
+  quantidade numeric(14,3) not null check (quantidade <> 0),
+  saldo_anterior numeric(14,3) not null,
+  saldo_posterior numeric(14,3) not null,
   origem_tipo text,
   origem_id uuid,
   motivo text,
@@ -38,11 +34,9 @@ create table if not exists public.producao_estoque_movimentacoes (
 
 create index if not exists producao_estoque_movimentacoes_insumo_data_idx
   on public.producao_estoque_movimentacoes (insumo_id, created_at desc);
-
 create index if not exists producao_estoque_movimentacoes_origem_idx
   on public.producao_estoque_movimentacoes (origem_tipo, origem_id)
   where origem_id is not null;
-
 create unique index if not exists producao_estoque_movimentacoes_estorno_uidx
   on public.producao_estoque_movimentacoes (movimento_estornado_id)
   where movimento_estornado_id is not null;
@@ -62,8 +56,8 @@ revoke all on public.producao_estoque_movimentacoes from public, anon, authentic
 grant select on public.producao_estoque_movimentacoes to authenticated;
 grant select, insert, update, delete on public.producao_estoque_movimentacoes to service_role;
 
--- Contexto temporário usado pelas funções transacionais. O trigger também
--- registra alterações diretas legadas como ajuste_direto, evitando saldo sem histórico.
+-- O trigger transforma toda mudança de saldo em uma linha de extrato.
+-- Alterações diretas legadas recebem o tipo ajuste_direto.
 create or replace function private.registrar_movimentacao_estoque_trigger()
 returns trigger
 language plpgsql
@@ -71,43 +65,32 @@ security definer
 set search_path = pg_catalog, public, private
 as $$
 declare
-  v_saldo_anterior numeric(14,4);
-  v_saldo_posterior numeric(14,4);
-  v_quantidade numeric(14,4);
+  v_anterior numeric(14,3);
+  v_posterior numeric(14,3);
+  v_delta numeric(14,3);
   v_tipo text;
   v_origem_tipo text;
   v_origem_id uuid;
   v_motivo text;
   v_observacoes text;
-  v_movimento_estornado_id uuid;
+  v_estornado_id uuid;
   v_criado_por uuid;
 begin
-  if tg_op = 'INSERT' then
-    v_saldo_anterior := 0;
-    v_saldo_posterior := new.estoque_atual;
-  else
-    v_saldo_anterior := old.estoque_atual;
-    v_saldo_posterior := new.estoque_atual;
-  end if;
-
-  v_quantidade := v_saldo_posterior - v_saldo_anterior;
-  if v_quantidade = 0 then
-    return new;
-  end if;
+  v_anterior := case when tg_op = 'INSERT' then 0 else old.estoque_atual end;
+  v_posterior := new.estoque_atual;
+  v_delta := v_posterior - v_anterior;
+  if v_delta = 0 then return new; end if;
 
   v_tipo := nullif(current_setting('app.estoque_tipo', true), '');
   if v_tipo is null then
-    v_tipo := case
-      when tg_op = 'INSERT' then 'saldo_inicial'
-      else 'ajuste_direto'
-    end;
+    v_tipo := case when tg_op = 'INSERT' then 'saldo_inicial' else 'ajuste_direto' end;
   end if;
 
   v_origem_tipo := nullif(current_setting('app.estoque_origem_tipo', true), '');
   v_origem_id := nullif(current_setting('app.estoque_origem_id', true), '')::uuid;
   v_motivo := nullif(current_setting('app.estoque_motivo', true), '');
   v_observacoes := nullif(current_setting('app.estoque_observacoes', true), '');
-  v_movimento_estornado_id := nullif(current_setting('app.estoque_movimento_estornado_id', true), '')::uuid;
+  v_estornado_id := nullif(current_setting('app.estoque_movimento_estornado_id', true), '')::uuid;
   v_criado_por := coalesce(
     nullif(current_setting('app.estoque_criado_por', true), '')::uuid,
     (select auth.uid())
@@ -118,29 +101,13 @@ begin
   end if;
 
   insert into public.producao_estoque_movimentacoes (
-    insumo_id,
-    tipo,
-    quantidade,
-    saldo_anterior,
-    saldo_posterior,
-    origem_tipo,
-    origem_id,
-    motivo,
-    observacoes,
-    movimento_estornado_id,
-    criado_por
+    insumo_id, tipo, quantidade, saldo_anterior, saldo_posterior,
+    origem_tipo, origem_id, motivo, observacoes,
+    movimento_estornado_id, criado_por
   ) values (
-    new.id,
-    v_tipo,
-    v_quantidade,
-    v_saldo_anterior,
-    v_saldo_posterior,
-    v_origem_tipo,
-    v_origem_id,
-    v_motivo,
-    v_observacoes,
-    v_movimento_estornado_id,
-    v_criado_por
+    new.id, v_tipo, v_delta, v_anterior, v_posterior,
+    v_origem_tipo, v_origem_id, v_motivo, v_observacoes,
+    v_estornado_id, v_criado_por
   );
 
   return new;
@@ -151,33 +118,84 @@ revoke all on function private.registrar_movimentacao_estoque_trigger() from pub
 
 drop trigger if exists insumo_registra_movimentacao_estoque on public.producao_insumos;
 create trigger insumo_registra_movimentacao_estoque
-after insert or update of estoque_atual
-on public.producao_insumos
-for each row
-execute function private.registrar_movimentacao_estoque_trigger();
+after insert or update of estoque_atual on public.producao_insumos
+for each row execute function private.registrar_movimentacao_estoque_trigger();
 
--- Cria o saldo inicial para itens que já existiam antes do livro de movimentações.
+-- Registra o saldo que já existia antes da implantação do extrato.
 insert into public.producao_estoque_movimentacoes (
   insumo_id, tipo, quantidade, saldo_anterior, saldo_posterior,
   origem_tipo, motivo, criado_por, created_at
 )
 select
-  i.id,
-  'saldo_inicial',
-  i.estoque_atual,
-  0,
-  i.estoque_atual,
-  'migracao',
-  'Saldo existente na implantação do livro de movimentações',
-  null,
-  coalesce(i.created_at, now())
+  i.id, 'saldo_inicial', i.estoque_atual, 0, i.estoque_atual,
+  'migracao', 'Saldo existente na implantação do livro de movimentações',
+  null, coalesce(i.created_at, now())
 from public.producao_insumos i
 where i.estoque_atual <> 0
   and not exists (
-    select 1
-    from public.producao_estoque_movimentacoes m
-    where m.insumo_id = i.id
+    select 1 from public.producao_estoque_movimentacoes m where m.insumo_id = i.id
   );
+
+-- Único ponto interno que altera o saldo. Quantidade positiva entra;
+-- quantidade negativa sai. O saldo nunca pode ficar negativo.
+create or replace function private.aplicar_movimentacao_estoque(
+  p_insumo_id uuid,
+  p_quantidade numeric,
+  p_tipo text,
+  p_origem_tipo text default null,
+  p_origem_id uuid default null,
+  p_motivo text default null,
+  p_observacoes text default null,
+  p_movimento_estornado_id uuid default null,
+  p_criado_por uuid default null,
+  p_exigir_ativo boolean default true
+)
+returns numeric
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private
+as $$
+declare
+  v_saldo numeric(14,3);
+  v_novo_saldo numeric(14,3);
+begin
+  if p_quantidade is null or p_quantidade = 0 then
+    raise exception 'Quantidade de movimentação inválida';
+  end if;
+
+  select estoque_atual into v_saldo
+  from public.producao_insumos
+  where id = p_insumo_id and (not p_exigir_ativo or ativo)
+  for update;
+  if not found then raise exception 'Insumo não encontrado ou inativo'; end if;
+
+  v_novo_saldo := (v_saldo + p_quantidade)::numeric(14,3);
+  if v_novo_saldo = v_saldo then
+    raise exception 'Quantidade menor que a precisão aceita pelo estoque';
+  end if;
+  if v_novo_saldo < 0 then
+    raise exception 'Estoque insuficiente. Disponível: %, movimentação: %', v_saldo, p_quantidade;
+  end if;
+
+  perform set_config('app.estoque_tipo', p_tipo, true);
+  perform set_config('app.estoque_origem_tipo', coalesce(p_origem_tipo, ''), true);
+  perform set_config('app.estoque_origem_id', coalesce(p_origem_id::text, ''), true);
+  perform set_config('app.estoque_motivo', coalesce(p_motivo, ''), true);
+  perform set_config('app.estoque_observacoes', coalesce(p_observacoes, ''), true);
+  perform set_config('app.estoque_movimento_estornado_id', coalesce(p_movimento_estornado_id::text, ''), true);
+  perform set_config('app.estoque_criado_por', coalesce(p_criado_por::text, (select auth.uid())::text, ''), true);
+
+  update public.producao_insumos
+  set estoque_atual = v_novo_saldo, updated_at = now()
+  where id = p_insumo_id
+  returning estoque_atual into v_novo_saldo;
+
+  return v_novo_saldo;
+end;
+$$;
+
+revoke all on function private.aplicar_movimentacao_estoque(uuid, numeric, text, text, uuid, text, text, uuid, uuid, boolean)
+  from public, anon, authenticated;
 
 create or replace function public.registrar_entrada_estoque(
   insumo_id_param uuid,
@@ -190,8 +208,6 @@ language plpgsql
 security definer
 set search_path = pg_catalog, public, private
 as $$
-declare
-  v_saldo numeric(14,4);
 begin
   if (select auth.uid()) is null
     or not private.usuario_pode_acessar('producao_estoque') then
@@ -204,27 +220,10 @@ begin
     raise exception 'Informe o motivo da entrada';
   end if;
 
-  select estoque_atual into v_saldo
-  from public.producao_insumos
-  where id = insumo_id_param and ativo
-  for update;
-  if not found then raise exception 'Insumo não encontrado ou inativo'; end if;
-
-  perform set_config('app.estoque_tipo', 'entrada_manual', true);
-  perform set_config('app.estoque_origem_tipo', 'entrada_manual', true);
-  perform set_config('app.estoque_origem_id', '', true);
-  perform set_config('app.estoque_motivo', btrim(motivo_param), true);
-  perform set_config('app.estoque_observacoes', coalesce(observacoes_param, ''), true);
-  perform set_config('app.estoque_movimento_estornado_id', '', true);
-  perform set_config('app.estoque_criado_por', (select auth.uid())::text, true);
-
-  update public.producao_insumos
-  set estoque_atual = estoque_atual + quantidade_param,
-      updated_at = now()
-  where id = insumo_id_param
-  returning estoque_atual into v_saldo;
-
-  return v_saldo;
+  return private.aplicar_movimentacao_estoque(
+    insumo_id_param, quantidade_param, 'entrada_manual', 'entrada_manual', null,
+    btrim(motivo_param), observacoes_param, null, (select auth.uid()), true
+  );
 end;
 $$;
 
@@ -239,8 +238,6 @@ language plpgsql
 security definer
 set search_path = pg_catalog, public, private
 as $$
-declare
-  v_saldo numeric(14,4);
 begin
   if (select auth.uid()) is null
     or not private.usuario_pode_acessar('producao_estoque') then
@@ -253,30 +250,10 @@ begin
     raise exception 'Informe o motivo da saída';
   end if;
 
-  select estoque_atual into v_saldo
-  from public.producao_insumos
-  where id = insumo_id_param and ativo
-  for update;
-  if not found then raise exception 'Insumo não encontrado ou inativo'; end if;
-  if v_saldo < quantidade_param then
-    raise exception 'Estoque insuficiente. Disponível: %', v_saldo;
-  end if;
-
-  perform set_config('app.estoque_tipo', 'saida_manual', true);
-  perform set_config('app.estoque_origem_tipo', 'saida_manual', true);
-  perform set_config('app.estoque_origem_id', '', true);
-  perform set_config('app.estoque_motivo', btrim(motivo_param), true);
-  perform set_config('app.estoque_observacoes', coalesce(observacoes_param, ''), true);
-  perform set_config('app.estoque_movimento_estornado_id', '', true);
-  perform set_config('app.estoque_criado_por', (select auth.uid())::text, true);
-
-  update public.producao_insumos
-  set estoque_atual = estoque_atual - quantidade_param,
-      updated_at = now()
-  where id = insumo_id_param
-  returning estoque_atual into v_saldo;
-
-  return v_saldo;
+  return private.aplicar_movimentacao_estoque(
+    insumo_id_param, -quantidade_param, 'saida_manual', 'saida_manual', null,
+    btrim(motivo_param), observacoes_param, null, (select auth.uid()), true
+  );
 end;
 $$;
 
@@ -292,7 +269,8 @@ security definer
 set search_path = pg_catalog, public, private
 as $$
 declare
-  v_saldo_atual numeric(14,4);
+  v_atual numeric(14,3);
+  v_delta numeric(14,3);
   v_tipo text;
 begin
   if (select auth.uid()) is null
@@ -306,31 +284,20 @@ begin
     raise exception 'Informe o motivo do ajuste';
   end if;
 
-  select estoque_atual into v_saldo_atual
+  select estoque_atual into v_atual
   from public.producao_insumos
   where id = insumo_id_param and ativo
   for update;
   if not found then raise exception 'Insumo não encontrado ou inativo'; end if;
-  if v_saldo_atual = novo_saldo_param then return v_saldo_atual; end if;
 
-  v_tipo := case when novo_saldo_param > v_saldo_atual
-    then 'ajuste_positivo' else 'ajuste_negativo' end;
+  v_delta := (novo_saldo_param - v_atual)::numeric(14,3);
+  if v_delta = 0 then return v_atual; end if;
+  v_tipo := case when v_delta > 0 then 'ajuste_positivo' else 'ajuste_negativo' end;
 
-  perform set_config('app.estoque_tipo', v_tipo, true);
-  perform set_config('app.estoque_origem_tipo', 'inventario', true);
-  perform set_config('app.estoque_origem_id', '', true);
-  perform set_config('app.estoque_motivo', btrim(motivo_param), true);
-  perform set_config('app.estoque_observacoes', coalesce(observacoes_param, ''), true);
-  perform set_config('app.estoque_movimento_estornado_id', '', true);
-  perform set_config('app.estoque_criado_por', (select auth.uid())::text, true);
-
-  update public.producao_insumos
-  set estoque_atual = novo_saldo_param,
-      updated_at = now()
-  where id = insumo_id_param
-  returning estoque_atual into v_saldo_atual;
-
-  return v_saldo_atual;
+  return private.aplicar_movimentacao_estoque(
+    insumo_id_param, v_delta, v_tipo, 'inventario', null,
+    btrim(motivo_param), observacoes_param, null, (select auth.uid()), true
+  );
 end;
 $$;
 
@@ -345,7 +312,6 @@ set search_path = pg_catalog, public, private
 as $$
 declare
   v_movimento public.producao_estoque_movimentacoes%rowtype;
-  v_saldo numeric(14,4);
   v_estorno_id uuid;
 begin
   if (select auth.uid()) is null
@@ -361,9 +327,7 @@ begin
   where id = movimentacao_id_param
   for update;
   if not found then raise exception 'Movimentação não encontrada'; end if;
-  if v_movimento.tipo = 'estorno' then
-    raise exception 'Não é permitido estornar um estorno';
-  end if;
+  if v_movimento.tipo = 'estorno' then raise exception 'Não é permitido estornar um estorno'; end if;
   if exists (
     select 1 from public.producao_estoque_movimentacoes
     where movimento_estornado_id = v_movimento.id
@@ -371,32 +335,22 @@ begin
     raise exception 'Esta movimentação já foi estornada';
   end if;
 
-  select estoque_atual into v_saldo
-  from public.producao_insumos
-  where id = v_movimento.insumo_id
-  for update;
-  if not found then raise exception 'Insumo não encontrado'; end if;
-  if v_saldo - v_movimento.quantidade < 0 then
-    raise exception 'O estorno deixaria o estoque negativo';
-  end if;
-
-  perform set_config('app.estoque_tipo', 'estorno', true);
-  perform set_config('app.estoque_origem_tipo', 'movimentacao_estoque', true);
-  perform set_config('app.estoque_origem_id', v_movimento.id::text, true);
-  perform set_config('app.estoque_motivo', btrim(motivo_param), true);
-  perform set_config('app.estoque_observacoes', 'Estorno da movimentação ' || v_movimento.id::text, true);
-  perform set_config('app.estoque_movimento_estornado_id', v_movimento.id::text, true);
-  perform set_config('app.estoque_criado_por', (select auth.uid())::text, true);
-
-  update public.producao_insumos
-  set estoque_atual = estoque_atual - v_movimento.quantidade,
-      updated_at = now()
-  where id = v_movimento.insumo_id;
+  perform private.aplicar_movimentacao_estoque(
+    v_movimento.insumo_id,
+    -v_movimento.quantidade,
+    'estorno',
+    'movimentacao_estoque',
+    v_movimento.id,
+    btrim(motivo_param),
+    'Estorno da movimentação ' || v_movimento.id::text,
+    v_movimento.id,
+    (select auth.uid()),
+    false
+  );
 
   select id into v_estorno_id
   from public.producao_estoque_movimentacoes
   where movimento_estornado_id = v_movimento.id;
-
   return v_estorno_id;
 end;
 $$;
@@ -410,7 +364,7 @@ grant execute on function public.registrar_saida_estoque(uuid, numeric, text, te
 grant execute on function public.ajustar_estoque_insumo(uuid, numeric, text, text) to authenticated, service_role;
 grant execute on function public.estornar_movimentacao_estoque(uuid, text) to authenticated, service_role;
 
--- Compras do Mercado passam a gerar entrada rastreável no extrato.
+-- Compras do Mercado passam a gerar entrada rastreável.
 create or replace function public.registrar_compra_mercado(
   p_fornecedor_id uuid,
   p_data_compra date,
@@ -503,18 +457,10 @@ begin
       v_compra_id, v_insumo_id, v_qtd, v_unidade, v_preco, v_linha
     );
 
-    perform set_config('app.estoque_tipo', 'entrada_compra', true);
-    perform set_config('app.estoque_origem_tipo', 'mercado_compra', true);
-    perform set_config('app.estoque_origem_id', v_compra_id::text, true);
-    perform set_config('app.estoque_motivo', 'Compra registrada no Mercado', true);
-    perform set_config('app.estoque_observacoes', coalesce(p_observacoes, ''), true);
-    perform set_config('app.estoque_movimento_estornado_id', '', true);
-    perform set_config('app.estoque_criado_por', v_usuario_id::text, true);
-
-    update public.producao_insumos
-    set estoque_atual = estoque_atual + v_qtd,
-        updated_at = now()
-    where id = v_insumo_id;
+    perform private.aplicar_movimentacao_estoque(
+      v_insumo_id, v_qtd, 'entrada_compra', 'mercado_compra', v_compra_id,
+      'Compra registrada no Mercado', p_observacoes, null, v_usuario_id, true
+    );
   end loop;
 
   return v_compra_id;
@@ -524,7 +470,7 @@ $$;
 revoke all on function public.registrar_compra_mercado(uuid, date, jsonb, text, text, text, uuid) from public, anon;
 grant execute on function public.registrar_compra_mercado(uuid, date, jsonb, text, text, text, uuid) to authenticated, service_role;
 
--- Consumo real deixa de esconder falta de estoque e passa a gerar saída/estorno rastreável.
+-- Consumo real deixa de esconder falta de estoque.
 create or replace function private.baixar_consumo_do_estoque()
 returns trigger
 language plpgsql
@@ -536,13 +482,11 @@ declare
   v_insumo_id uuid;
   v_planejamento_id uuid;
   v_registrado_por uuid;
-  v_saldo numeric(14,4);
-  v_nome text;
   v_tipo text;
 begin
-  v_insumo_id := coalesce(new.insumo_id, old.insumo_id);
-  v_planejamento_id := coalesce(new.planejamento_id, old.planejamento_id);
-  v_registrado_por := coalesce(new.registrado_por, old.registrado_por, (select auth.uid()));
+  v_insumo_id := case when tg_op = 'DELETE' then old.insumo_id else new.insumo_id end;
+  v_planejamento_id := case when tg_op = 'DELETE' then old.planejamento_id else new.planejamento_id end;
+  v_registrado_por := case when tg_op = 'DELETE' then old.registrado_por else new.registrado_por end;
   v_delta_consumo := case
     when tg_op = 'INSERT' then new.quantidade_utilizada
     when tg_op = 'DELETE' then -old.quantidade_utilizada
@@ -554,38 +498,23 @@ begin
     return new;
   end if;
 
-  select estoque_atual, nome into v_saldo, v_nome
-  from public.producao_insumos
-  where id = v_insumo_id
-  for update;
-  if not found then raise exception 'Insumo do consumo não encontrado'; end if;
-  if v_delta_consumo > 0 and v_saldo < v_delta_consumo then
-    raise exception 'Estoque insuficiente de %. Disponível: %, necessário: %',
-      v_nome, v_saldo, v_delta_consumo;
-  end if;
+  v_tipo := case when v_delta_consumo > 0 then 'saida_producao' else 'estorno_consumo' end;
 
-  v_tipo := case when v_delta_consumo > 0
-    then 'saida_producao' else 'estorno_consumo' end;
-
-  perform set_config('app.estoque_tipo', v_tipo, true);
-  perform set_config('app.estoque_origem_tipo', 'producao_planejamento', true);
-  perform set_config('app.estoque_origem_id', v_planejamento_id::text, true);
-  perform set_config(
-    'app.estoque_motivo',
+  perform private.aplicar_movimentacao_estoque(
+    v_insumo_id,
+    -v_delta_consumo,
+    v_tipo,
+    'producao_planejamento',
+    v_planejamento_id,
     case when v_delta_consumo > 0
       then 'Consumo registrado na produção'
       else 'Correção ou exclusão de consumo da produção'
     end,
-    true
+    null,
+    null,
+    v_registrado_por,
+    false
   );
-  perform set_config('app.estoque_observacoes', '', true);
-  perform set_config('app.estoque_movimento_estornado_id', '', true);
-  perform set_config('app.estoque_criado_por', coalesce(v_registrado_por::text, ''), true);
-
-  update public.producao_insumos
-  set estoque_atual = estoque_atual - v_delta_consumo,
-      updated_at = now()
-  where id = v_insumo_id;
 
   if tg_op = 'DELETE' then return old; end if;
   return new;
@@ -594,8 +523,7 @@ $$;
 
 revoke all on function private.baixar_consumo_do_estoque() from public, anon, authenticated;
 
--- A existência de movimentações também obriga o arquivamento do insumo,
--- preservando o extrato mesmo quando ainda não existe consumo de produção.
+-- Movimentações também obrigam arquivamento do insumo, preservando o extrato.
 create or replace function public.excluir_insumo_producao(insumo_id_param uuid)
 returns text
 language plpgsql
