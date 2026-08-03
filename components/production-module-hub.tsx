@@ -1,10 +1,11 @@
 import Link from "next/link"
-import { BookOpenText, ClipboardList, Factory, PackageSearch, Snowflake } from "lucide-react"
+import { BookOpenText, ClipboardList, Factory, PackageSearch, Snowflake, Soup } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 
 const areas = [
   { href: "/producao", label: "Planejamento", description: "Calendário, produção, congelamento e compras.", icon: Factory },
-  { href: "/receitas", label: "Ficha Técnica", description: "Receitas, rendimentos, produção de preparos e molhos.", icon: BookOpenText },
+  { href: "/receitas", label: "Ficha Técnica", description: "Composição, rendimentos e preparos intermediários.", icon: BookOpenText },
+  { href: "/molhos", label: "Molhos", description: "Produção, estoque, saídas e perdas de bisnagas.", icon: Soup },
   { href: "/producao/cadastros", label: "Cadastros", description: "Insumos, custos, produtos e vínculos.", icon: ClipboardList },
   { href: "/producao/inventario", label: "Inventário", description: "Contagem física e rastreabilidade completa.", icon: PackageSearch },
   { href: "/estoque-salgadinhos", label: "Estoque Final", description: "Lotes, empacotamento e retiradas de salgadinhos.", icon: Snowflake },
