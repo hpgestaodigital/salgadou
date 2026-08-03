@@ -22,6 +22,7 @@ export const MODULOS = [
   { key: "cadastros", label: "Cadastros", href: "/cadastros" },
   { key: "usuarios", label: "Usuários e acessos", href: "/usuarios" },
   { key: "configuracoes", label: "Configurações", href: "/configuracoes" },
+  { key: "mercado", label: "Mercado", href: "/mercado" },
   { key: "producao_compras", label: "Produção · Lista de compras", href: "/producao?tab=compras" },
   { key: "producao_estoque", label: "Produção · Estoque", href: "/producao?tab=estoque" },
   { key: "producao_planejamento", label: "Produção · Planejamento", href: "/producao?tab=planejamento" },

@@ -23,6 +23,7 @@ import {
   Landmark,
   Presentation,
   Target,
+  ShoppingCart,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -40,6 +41,7 @@ const NAV = [
   { href: "/kanban", label: "Kanban", icon: KanbanSquare, modulo: "kanban" as Modulo },
   { href: "/reunioes", label: "Reuniões", icon: MessagesSquare, modulo: "reunioes" as Modulo },
   { href: "/producao", label: "Produção", icon: Factory, modulo: "producao" as const },
+  { href: "/mercado", label: "Mercado", icon: ShoppingCart, modulo: "mercado" as Modulo },
   { href: "/financeiro", label: "Financeiro", icon: Landmark, modulo: "financeiro" as Modulo },
   { href: "/metas", label: "Metas", icon: Target, modulo: "metas" as Modulo },
   { href: "/juridico", label: "Jurídico", icon: Scale, modulo: "juridico" as Modulo },
@@ -113,6 +115,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         sessao.permissoes.producao_estoque ||
         sessao.permissoes.producao_planejamento
       )
+    }
+    // Mercado reutiliza a permissão de producao_compras do banco
+    if (item.modulo === "mercado") {
+      return Boolean(sessao.permissoes.producao_compras)
     }
     return Boolean(sessao.permissoes[item.modulo])
   })
