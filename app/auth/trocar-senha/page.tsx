@@ -24,8 +24,8 @@ export default function TrocarSenhaPage() {
     e.preventDefault()
     setErro("")
 
-    if (senha.length < 8) {
-      return setErro("A senha deve possuir pelo menos 8 caracteres.")
+    if (senha.length < 8 || senha.length > 128) {
+      return setErro("A senha deve possuir entre 8 e 128 caracteres.")
     }
 
     if (senha !== confirmar) {
@@ -33,19 +33,16 @@ export default function TrocarSenhaPage() {
     }
 
     setLoading(true)
-
-    const { error } = await supabase.auth.updateUser({ password: senha })
-    if (error) {
-      setLoading(false)
-      return setErro(error.message)
-    }
-
-    const resposta = await fetch("/api/auth/trocar-senha", { method: "POST" })
+    const resposta = await fetch("/api/auth/trocar-senha", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ novaSenha: senha }),
+    })
     const json = await resposta.json()
 
     if (!resposta.ok) {
       setLoading(false)
-      return setErro(json.error || "A senha foi alterada, mas não foi possível liberar o acesso.")
+      return setErro(json.error || "Não foi possível alterar a senha.")
     }
 
     const { error: refreshError } = await supabase.auth.refreshSession()
@@ -77,13 +74,31 @@ export default function TrocarSenhaPage() {
         <CardContent>
           <form onSubmit={salvar} className="space-y-4">
             <div>
-              <Label>Nova senha</Label>
-              <Input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} />
+              <Label htmlFor="nova-senha">Nova senha</Label>
+              <Input
+                id="nova-senha"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                maxLength={128}
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                required
+              />
             </div>
 
             <div>
-              <Label>Confirmar senha</Label>
-              <Input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} />
+              <Label htmlFor="confirmar-senha">Confirmar senha</Label>
+              <Input
+                id="confirmar-senha"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                maxLength={128}
+                value={confirmar}
+                onChange={(e) => setConfirmar(e.target.value)}
+                required
+              />
             </div>
 
             {erro && <p className="text-sm text-red-500">{erro}</p>}
