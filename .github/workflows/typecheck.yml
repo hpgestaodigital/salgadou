@@ -1,4 +1,4 @@
-name: TypeScript
+name: Qualidade
 
 on:
   pull_request:
@@ -7,7 +7,7 @@ on:
       - fix/prelaunch-production-loading
 
 jobs:
-  typecheck:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,3 +28,6 @@ jobs:
 
       - name: Type check
         run: pnpm exec tsc --noEmit
+
+      - name: Lint
+        run: pnpm run lint
