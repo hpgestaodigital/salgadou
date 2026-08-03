@@ -19,6 +19,13 @@ const ROTAS_MODULOS = [
   { prefixo: "/configuracoes", modulo: "configuracoes" },
 ] as const
 
+const ROTAS_PRODUCAO = [
+  "/producao",
+  "/receitas",
+  "/estoque-salgadinhos",
+  "/integracoes",
+] as const
+
 const DESTINOS = [
   ["dashboard", "/"], ["escala", "/escala"], ["kanban", "/kanban"],
   ["reunioes", "/reunioes"], ["producao_planejamento", "/producao"],
@@ -71,6 +78,7 @@ export async function updateSession(request: NextRequest) {
     url.pathname = deveTrocarSenha ? "/auth/trocar-senha" : "/"
     return NextResponse.redirect(url)
   }
+
   if (
     user &&
     deveTrocarSenha &&
@@ -114,8 +122,17 @@ export async function updateSession(request: NextRequest) {
       for (const modulo of ["dashboard", "escala", "kanban"]) permissoes[modulo] = true
     }
 
+    if (pathname.startsWith("/demonstracao") && papel !== "admin") {
+      const destino = DESTINOS.find(([modulo]) => permissoes[modulo])?.[1] || "/auth/sem-acesso"
+      const url = request.nextUrl.clone()
+      const [novoPath, query] = destino.split("?")
+      url.pathname = novoPath
+      url.search = query ? `?${query}` : ""
+      return NextResponse.redirect(url)
+    }
+
     let moduloAtual: string | null = pathname === "/" ? "dashboard" : null
-    if (pathname.startsWith("/producao")) {
+    if (ROTAS_PRODUCAO.some((rota) => pathname === rota || pathname.startsWith(`${rota}/`))) {
       moduloAtual = ["producao_compras", "producao_estoque", "producao_planejamento"]
         .some((modulo) => permissoes[modulo]) ? "producao" : "producao_bloqueada"
     } else {
