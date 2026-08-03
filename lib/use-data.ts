@@ -7,6 +7,8 @@ const PROTECTED_TABLE_RPCS: Record<string, string> = {
   colaboradores: "listar_colaboradores",
   motoboys: "listar_motoboys",
   fornecedores: "listar_fornecedores",
+  pagamentos_fornecedores: "listar_pagamentos_fornecedores",
+  pagamentos_motoboys: "listar_pagamentos_motoboys",
 }
 
 export function useTable<T>(table: string, orderBy?: { column: string; ascending?: boolean }) {
