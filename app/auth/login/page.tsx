@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { Loader2, LogIn, UtensilsCrossed } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
@@ -16,10 +16,6 @@ export default function LoginPage() {
   const [senha, setSenha] = useState("")
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch("/api/auth/ensure-admin", { method: "POST" }).catch(() => {})
-  }, [])
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault()
