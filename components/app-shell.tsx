@@ -68,6 +68,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let ativo = true
+    if (!supabase?.auth) return
+    
     supabase.auth.getUser().then(({ data }: { data: { user: import("@supabase/supabase-js").User | null } }) => {
       if (!ativo) return
       const u = data.user
@@ -75,7 +77,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       carregarPermissoes(u).then((permissoes) => {
         if (ativo) setSessao({ nome: getNome(u), papel: getPapel(u), admin: isAdmin(u), avatarUrl: String(u.user_metadata?.avatar_url ?? ""), permissoes })
       })
+    }).catch(() => {
+      // Silently handle auth errors when Supabase is not configured
+      if (ativo) setSessao(null)
     })
+    
     const { data: sub } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       const u = session?.user ?? null
       if (!u) return setSessao(null)
@@ -83,7 +89,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     })
     return () => {
       ativo = false
-      sub.subscription.unsubscribe()
+      sub?.subscription?.unsubscribe?.()
     }
   }, [supabase])
 
