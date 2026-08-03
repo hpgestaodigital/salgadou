@@ -10,19 +10,24 @@ const MODULO_POR_TIPO = {
 
 type TipoNotificacao = keyof typeof MODULO_POR_TIPO
 
+function tipoValido(value: string): value is TipoNotificacao {
+  return Object.prototype.hasOwnProperty.call(MODULO_POR_TIPO, value)
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
 
   const body = await request.json().catch(() => null)
-  const tipo = String(body?.tipo ?? "") as TipoNotificacao
+  const tipoInformado = String(body?.tipo ?? "")
   const id = String(body?.id ?? "")
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  if (!(tipo in MODULO_POR_TIPO) || !uuid.test(id)) {
+  if (!tipoValido(tipoInformado) || !uuid.test(id)) {
     return NextResponse.json({ error: "Dados inválidos." }, { status: 400 })
   }
 
+  const tipo = tipoInformado
   const modulo = MODULO_POR_TIPO[tipo]
   const papel = String(user.app_metadata?.role || "colaborador")
   const [{ data: individual, error: individualError }, { data: padrao, error: padraoError }] = await Promise.all([
