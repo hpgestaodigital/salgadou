@@ -61,8 +61,8 @@ export function ProductionIntegrationsRoadmap() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Integrações da Produção"
-        description="Etapa deliberadamente pendente até a operação interna e os códigos comerciais estarem homologados."
+        title="Integrações"
+        description="Central das integrações futuras da Salgadou com sistemas externos e automações."
       />
 
       <Card className="border-amber-500/30 bg-amber-500/5">
