@@ -10,6 +10,7 @@ const ROTAS_MODULOS = [
   { prefixo: "/juridico", modulo: "juridico" },
   { prefixo: "/financeiro", modulo: "financeiro" },
   { prefixo: "/metas", modulo: "metas" },
+  { prefixo: "/mercado", modulo: "producao_compras" },
   { prefixo: "/historico", modulo: "historico" },
   { prefixo: "/pagamentos-fornecedores", modulo: "pagamentos_fornecedores" },
   { prefixo: "/pagamentos-motoboys", modulo: "pagamentos_motoboys" },
@@ -66,27 +67,27 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && pathname === "/auth/login") {
-  const url = request.nextUrl.clone()
-  url.pathname = deveTrocarSenha ? "/auth/trocar-senha" : "/"
-  return NextResponse.redirect(url)
-}
-if (
-  user &&
-  deveTrocarSenha &&
-  !rotaTrocarSenha &&
-  !pathname.startsWith("/api/auth/trocar-senha")
-) {
-  const url = request.nextUrl.clone()
-  url.pathname = "/auth/trocar-senha"
-  url.search = ""
-  return NextResponse.redirect(url)
-}
+    const url = request.nextUrl.clone()
+    url.pathname = deveTrocarSenha ? "/auth/trocar-senha" : "/"
+    return NextResponse.redirect(url)
+  }
+  if (
+    user &&
+    deveTrocarSenha &&
+    !rotaTrocarSenha &&
+    !pathname.startsWith("/api/auth/trocar-senha")
+  ) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/auth/trocar-senha"
+    url.search = ""
+    return NextResponse.redirect(url)
+  }
 
-if (user && !deveTrocarSenha && rotaTrocarSenha) {
-  const url = request.nextUrl.clone()
-  url.pathname = "/"
-  return NextResponse.redirect(url)
-}
+  if (user && !deveTrocarSenha && rotaTrocarSenha) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/"
+    return NextResponse.redirect(url)
+  }
 
   if (user && !rotaPublica && !pathname.startsWith("/api/")) {
     const papel = String(user.app_metadata?.role || "colaborador")
