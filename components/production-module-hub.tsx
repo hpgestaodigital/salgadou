@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { BookOpenText, ClipboardList, Factory, PackageSearch, PlugZap, Snowflake } from "lucide-react"
+import { BookOpenText, ClipboardList, Factory, PackageSearch, Snowflake } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 
 const areas = [
@@ -8,7 +8,6 @@ const areas = [
   { href: "/producao/cadastros", label: "Cadastros", description: "Insumos, custos, produtos e vínculos.", icon: ClipboardList },
   { href: "/producao/inventario", label: "Inventário", description: "Contagem física e rastreabilidade completa.", icon: PackageSearch },
   { href: "/estoque-salgadinhos", label: "Estoque Final", description: "Lotes, empacotamento e retiradas de salgadinhos.", icon: Snowflake },
-  { href: "/producao/integracoes", label: "Integrações", description: "Saipos, Evolution, iFood e n8n — etapa futura.", icon: PlugZap },
 ]
 
 export function ProductionModuleHub() {
