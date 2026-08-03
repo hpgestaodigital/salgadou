@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { BookOpenText, Boxes, ClipboardList, Factory, PackageSearch, PlugZap, Snowflake } from "lucide-react"
+import { BookOpenText, ClipboardList, Factory, PackageSearch, PlugZap, Snowflake } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 
 const areas = [
