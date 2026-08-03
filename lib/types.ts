@@ -118,6 +118,32 @@ export type Configuracao = {
   updated_at: string
 }
 
+export type MercadoCompra = {
+  id: string
+  fornecedor_id: string | null
+  local_compra: string | null
+  data_compra: string
+  valor_total: number
+  nota_path: string | null
+  observacoes: string | null
+  idempotency_key: string
+  criado_por: string
+  created_at: string
+  fornecedor?: { nome: string } | null
+  itens?: MercadoCompraItem[]
+}
+
+export type MercadoCompraItem = {
+  id: string
+  compra_id: string
+  insumo_id: string
+  quantidade_comprada: number
+  unidade: string
+  preco_unitario: number
+  preco_total: number
+  insumo?: { nome: string; unidade: string } | null
+}
+
 export const DIAS = [
   { key: "seg", label: "Seg" },
   { key: "ter", label: "Ter" },
