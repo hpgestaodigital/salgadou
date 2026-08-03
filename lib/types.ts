@@ -121,11 +121,13 @@ export type Configuracao = {
 export type MercadoCompra = {
   id: string
   fornecedor_id: string | null
+  local_compra: string | null
   data_compra: string
   valor_total: number
   nota_path: string | null
   observacoes: string | null
-  criado_por: string | null
+  idempotency_key: string
+  criado_por: string
   created_at: string
   fornecedor?: { nome: string } | null
   itens?: MercadoCompraItem[]
@@ -136,6 +138,7 @@ export type MercadoCompraItem = {
   compra_id: string
   insumo_id: string
   quantidade_comprada: number
+  unidade: string
   preco_unitario: number
   preco_total: number
   insumo?: { nome: string; unidade: string } | null
