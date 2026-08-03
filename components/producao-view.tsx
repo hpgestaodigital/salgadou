@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { EstoqueMovimentacoes } from "@/components/estoque-movimentacoes"
 
 type Insumo = { id: string; nome: string; unidade: string; estoque_atual: number; estoque_minimo: number; ativo: boolean }
 type Produto = { id: string; nome: string; unidade: string; ativo: boolean }
@@ -95,6 +96,7 @@ export function ProducaoView() {
     return insumos.filter((i) => i.ativo && ids.has(i.id))
   }, [insumos, receitas, novoPlano.produto_id])
   const tituloMes = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(mesCalendario)
+  const estoqueRefreshKey = insumos.map((item) => `${item.id}:${item.estoque_atual}`).join("|")
 
   function navegarMes(direcao: number) {
     setMesCalendario((atual) => new Date(atual.getFullYear(), atual.getMonth() + direcao, 1))
@@ -148,8 +150,11 @@ export function ProducaoView() {
       if (error) throw error
       toast.success(sucesso)
       await carregar()
-    } catch {
-      toast.error("Não foi possível salvar. Confira os dados e tente novamente.")
+    } catch (error) {
+      const mensagem = error && typeof error === "object" && "message" in error
+        ? String(error.message)
+        : "Não foi possível salvar. Confira os dados e tente novamente."
+      toast.error(mensagem)
     } finally {
       setSaving(false)
     }
@@ -157,21 +162,37 @@ export function ProducaoView() {
 
   async function adicionarInsumo() {
     if (!novoInsumo.nome.trim()) return toast.error("Informe o nome do insumo.")
+    const estoqueAtual = Number(novoInsumo.estoque_atual || 0)
+    const estoqueMinimo = Number(novoInsumo.estoque_minimo || 0)
+    if (!Number.isFinite(estoqueAtual) || estoqueAtual < 0 || !Number.isFinite(estoqueMinimo) || estoqueMinimo < 0) {
+      return toast.error("Confira o estoque inicial e o estoque mínimo.")
+    }
     await executar(
       () => supabase.from("producao_insumos").insert({
         nome: novoInsumo.nome.trim(), unidade: novoInsumo.unidade,
-        estoque_atual: Number(novoInsumo.estoque_atual || 0),
-        estoque_minimo: Number(novoInsumo.estoque_minimo || 0),
+        estoque_atual: estoqueAtual,
+        estoque_minimo: estoqueMinimo,
       }),
-      "Insumo adicionado.",
+      "Insumo adicionado e saldo inicial registrado.",
     )
     setNovoInsumo({ nome: "", unidade: "kg", estoque_atual: "", estoque_minimo: "" })
   }
 
   async function ajustarEstoque(insumo: Insumo, valor: string) {
+    const novoSaldo = Number(valor)
+    if (!Number.isFinite(novoSaldo) || novoSaldo < 0) return toast.error("Informe um saldo válido.")
+    if (novoSaldo === Number(insumo.estoque_atual)) return toast.error("O saldo informado é igual ao saldo atual.")
+    const motivo = window.prompt(`Informe o motivo do ajuste de ${insumo.nome}:`, "Contagem física de estoque")
+    if (!motivo?.trim()) return
+
     await executar(
-      () => supabase.from("producao_insumos").update({ estoque_atual: Number(valor), updated_at: new Date().toISOString() }).eq("id", insumo.id),
-      "Estoque atualizado.",
+      () => supabase.rpc("ajustar_estoque_insumo", {
+        insumo_id_param: insumo.id,
+        novo_saldo_param: novoSaldo,
+        motivo_param: motivo.trim(),
+        observacoes_param: null,
+      }),
+      "Ajuste registrado no extrato do estoque.",
     )
   }
 
@@ -243,12 +264,12 @@ export function ProducaoView() {
   }
 
   async function excluirInsumo(insumo: Insumo) {
-    if (!window.confirm(`Excluir “${insumo.nome}”?\n\nReceitas, reservas e compras dependentes serão removidas. Se já houver consumo registrado, o insumo será arquivado para preservar o histórico. Esta ação ficará registrada no Histórico do ERP.`)) return
+    if (!window.confirm(`Excluir “${insumo.nome}”?\n\nReceitas, reservas e compras dependentes serão removidas. Se houver consumo ou movimentação de estoque, o insumo será arquivado para preservar o histórico. Esta ação ficará registrada no Histórico do ERP.`)) return
     setSaving(true)
     try {
       const { data, error } = await supabase.rpc("excluir_insumo_producao", { insumo_id_param: insumo.id })
       if (error) throw error
-      toast.success(data === "arquivado" ? "Insumo arquivado; o histórico de consumo foi preservado." : "Insumo e dependências operacionais excluídos.")
+      toast.success(data === "arquivado" ? "Insumo arquivado; o histórico foi preservado." : "Insumo e dependências operacionais excluídos.")
       await carregar()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível excluir o insumo.")
@@ -407,16 +428,18 @@ export function ProducaoView() {
         <TabsContent value="estoque" className="mt-5 grid gap-5">
           <Card>
             <CardHeader><CardTitle>Novo insumo</CardTitle></CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-5">
+            <CardContent className="grid gap-3 sm:grid-cols-6">
               <Input className="sm:col-span-2" placeholder="Ex.: Farinha" value={novoInsumo.nome} onChange={(e) => setNovoInsumo({ ...novoInsumo, nome: e.target.value })} />
               <select className={selectClass} value={novoInsumo.unidade} onChange={(e) => setNovoInsumo({ ...novoInsumo, unidade: e.target.value })}><option>kg</option><option>g</option><option>l</option><option>ml</option><option>un</option><option>pct</option><option>cx</option></select>
-              <Input type="number" step="0.001" placeholder="Estoque atual" value={novoInsumo.estoque_atual} onChange={(e) => setNovoInsumo({ ...novoInsumo, estoque_atual: e.target.value })} />
+              <Input type="number" min="0" step="0.001" placeholder="Estoque inicial" value={novoInsumo.estoque_atual} onChange={(e) => setNovoInsumo({ ...novoInsumo, estoque_atual: e.target.value })} />
+              <Input type="number" min="0" step="0.001" placeholder="Estoque mínimo" value={novoInsumo.estoque_minimo} onChange={(e) => setNovoInsumo({ ...novoInsumo, estoque_minimo: e.target.value })} />
               <Button disabled={saving} onClick={adicionarInsumo}><Plus className="size-4" />Adicionar</Button>
             </CardContent>
           </Card>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {insumosAtivos.map((item) => <EstoqueCard key={item.id} item={item} reservado={reservasInsumos.filter((reserva) => reserva.insumo_id === item.id).reduce((total, reserva) => total + Number(reserva.quantidade_reservada), 0)} onSave={ajustarEstoque} onDelete={excluirInsumo} />)}
           </div>
+          <EstoqueMovimentacoes insumos={insumos} refreshKey={estoqueRefreshKey} onUpdated={carregar} />
           <Card>
             <CardHeader><CardTitle>Insumos reservados para produções</CardTitle><p className="text-sm text-muted-foreground">O material continua no estoque físico, mas já está comprometido com uma produção marcada.</p></CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
@@ -597,13 +620,14 @@ function EstoqueCard({ item, reservado, onSave, onDelete }: { item: Insumo; rese
   const [valor, setValor] = useState(String(item.estoque_atual))
   const disponivel = Math.max(0, Number(item.estoque_atual) - reservado)
   const baixo = disponivel <= item.estoque_minimo
+  useEffect(() => { setValor(String(item.estoque_atual)) }, [item.estoque_atual])
   return (
     <Card className={baixo ? "border-amber-500/50" : ""}>
       <CardHeader className="pb-2"><div className="flex items-start justify-between gap-3"><CardTitle className="text-base">{item.nome}</CardTitle><Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" onClick={() => onDelete(item)} aria-label={`Excluir ${item.nome}`}><Trash2 className="size-4" /></Button></div></CardHeader>
       <CardContent>
         <div className="mb-3 grid grid-cols-3 gap-2 rounded-lg bg-muted/30 p-2 text-center text-xs"><div><p className="text-muted-foreground">Físico</p><p className="font-semibold">{item.estoque_atual}</p></div><div><p className="text-muted-foreground">Reservado</p><p className="font-semibold text-amber-400">{reservado}</p></div><div><p className="text-muted-foreground">Disponível</p><p className="font-semibold text-primary">{disponivel}</p></div></div>
         <p className="mb-3 text-xs text-muted-foreground">Mínimo recomendado: {item.estoque_minimo} {item.unidade}{baixo ? " · Repor estoque" : ""}</p>
-        <div className="flex gap-2"><Input type="number" step="0.001" value={valor} onChange={(e) => setValor(e.target.value)} /><Button variant="outline" onClick={() => onSave(item, valor)}>Salvar</Button></div>
+        <div className="grid gap-2"><Label className="text-xs">Saldo contado</Label><div className="flex gap-2"><Input type="number" min="0" step="0.001" value={valor} onChange={(e) => setValor(e.target.value)} /><Button variant="outline" onClick={() => onSave(item, valor)}>Registrar ajuste</Button></div></div>
       </CardContent>
     </Card>
   )
