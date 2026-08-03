@@ -9,6 +9,12 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SUPABASE_URL: "https://build-check.supabase.co"
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "build-check-key"
+      SUPABASE_SERVICE_ROLE_KEY: "build-check-service-role"
+      CRON_SECRET: "build-check-cron-secret"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,5 +35,8 @@ jobs:
       - name: Type check
         run: pnpm exec tsc --noEmit
 
-      - name: Lint
+      - name: Static checks
         run: pnpm run lint
+
+      - name: Production build
+        run: pnpm run build
