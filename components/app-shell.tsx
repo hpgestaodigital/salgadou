@@ -24,6 +24,7 @@ import {
   Presentation,
   Target,
   ShoppingCart,
+  Snowflake,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -41,8 +42,9 @@ const NAV = [
   { href: "/kanban", label: "Kanban", icon: KanbanSquare, modulo: "kanban" as Modulo },
   { href: "/reunioes", label: "Reuniões", icon: MessagesSquare, modulo: "reunioes" as Modulo },
   { href: "/producao", label: "Produção", icon: Factory, modulo: "producao" as const },
+  { href: "/estoque-salgadinhos", label: "Estoque de Salgadinhos", icon: Snowflake, modulo: "producao" as const },
   { href: "/mercado", label: "Mercado", icon: ShoppingCart, modulo: "mercado" as Modulo },
-  { href: "/financeiro", label: "Financeiro", icon: Landmark, modulo: "financeiro" as Modulo },
+  { href: "/financeiro", label: "Leitor de Planilha", icon: Landmark, modulo: "financeiro" as Modulo },
   { href: "/metas", label: "Metas", icon: Target, modulo: "metas" as Modulo },
   { href: "/juridico", label: "Jurídico", icon: Scale, modulo: "juridico" as Modulo },
   { href: "/historico", label: "Histórico", icon: History, modulo: "historico" as Modulo },
@@ -101,7 +103,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.refresh()
   }
 
-  // Telas de autenticação não usam o layout com a barra lateral.
   if (pathname.startsWith("/auth")) {
     return <>{children}</>
   }
@@ -116,7 +117,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         sessao.permissoes.producao_planejamento
       )
     }
-    // Mercado reutiliza a permissão de producao_compras do banco
     if (item.modulo === "mercado") {
       return Boolean(sessao.permissoes.producao_compras)
     }
@@ -125,12 +125,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Sidebar - desktop */}
       <aside className="hidden lg:flex sticky top-0 h-screen w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
         <SidebarContent pathname={pathname} itens={itens} sessao={sessao} logoUrl={logoUrl} onSair={sair} />
       </aside>
 
-      {/* Sidebar - mobile overlay */}
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} aria-hidden />
@@ -151,7 +149,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="lg:hidden sticky top-0 z-30 flex items-center gap-3 border-b border-border/70 bg-background/90 px-4 py-3 backdrop-blur-xl">
           <Button variant="outline" size="icon" onClick={() => setOpen(true)} aria-label="Abrir menu">
