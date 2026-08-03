@@ -111,26 +111,26 @@ export function ReceitasView() {
     await carregar()
   }
 
-  if (loading) return <div className="flex justify-center py-20 text-muted-foreground"><Loader2 className="mr-2 animate-spin" />Carregando receitas...</div>
+  if (loading) return <div className="flex justify-center py-20 text-muted-foreground"><Loader2 className="mr-2 animate-spin" />Carregando fichas técnicas...</div>
 
   return <div className="space-y-6">
-    <PageHeader title="Receitas" description="Fichas técnicas separadas da rotina de planejamento, com composição, rendimento e produção real." />
+    <PageHeader title="Ficha Técnica" description="Composição, rendimento e produção real de salgados, massas, recheios e molhos." />
     <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/producao?tab=estoque">Voltar ao estoque de insumos</Link></Button><Badge variant="secondary">{fichas.length} ficha(s)</Badge></div>
 
     <Tabs value={categoria} onValueChange={(v) => setCategoria(v as Categoria)}>
       <TabsList className="h-auto flex-wrap">{categorias.map((item) => <TabsTrigger key={item.id} value={item.id}>{item.label}</TabsTrigger>)}</TabsList>
       {categorias.map((item) => <TabsContent key={item.id} value={item.id} className="mt-5 space-y-5">
         <Card><CardHeader><CardTitle>Nova ficha de {item.label.toLowerCase()}</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-[1.4fr_150px_150px_1fr_auto]">
-          <Input placeholder="Nome da receita" value={novaFicha.nome} onChange={(e) => setNovaFicha({ ...novaFicha, nome: e.target.value })} />
+          <Input placeholder="Nome da ficha" value={novaFicha.nome} onChange={(e) => setNovaFicha({ ...novaFicha, nome: e.target.value })} />
           <select className={selectClass} value={novaFicha.unidade} onChange={(e) => setNovaFicha({ ...novaFicha, unidade: e.target.value })}><option value="un">unidades</option><option value="g">gramas</option><option value="kg">kg</option><option value="ml">ml</option><option value="l">litros</option></select>
           <Input type="number" min="0.0001" step="0.001" placeholder="Rendimento" value={novaFicha.rendimento} onChange={(e) => setNovaFicha({ ...novaFicha, rendimento: e.target.value })} />
           <Input placeholder="Observações" value={novaFicha.observacoes} onChange={(e) => setNovaFicha({ ...novaFicha, observacoes: e.target.value })} />
           <Button disabled={saving} onClick={criarFicha}><Plus className="size-4" />Criar</Button>
         </CardContent></Card>
 
-        <Card><CardHeader><CardTitle>Adicionar item à ficha técnica</CardTitle><p className="text-sm text-muted-foreground">Use insumos para qualquer ficha. Salgados também podem usar massas ou recheios já cadastrados, evitando dupla contagem.</p></CardHeader><CardContent className="grid gap-3 md:grid-cols-[1.3fr_140px_1.3fr_130px_120px_auto]">
+        <Card><CardHeader><CardTitle>Adicionar item à ficha técnica</CardTitle><p className="text-sm text-muted-foreground">Use insumos para qualquer ficha. Salgados também podem usar preparos já cadastrados, como massas, recheios e bechamel, evitando dupla contagem.</p></CardHeader><CardContent className="grid gap-3 md:grid-cols-[1.3fr_140px_1.3fr_130px_120px_auto]">
           <select className={selectClass} value={novoItem.ficha_id} onChange={(e) => setNovoItem({ ...novoItem, ficha_id: e.target.value })}><option value="">Selecione a ficha</option>{fichasCategoria.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}</select>
-          <select className={selectClass} value={novoItem.tipo} onChange={(e) => setNovoItem({ ...novoItem, tipo: e.target.value, referencia_id: "" })}><option value="insumo">Insumo</option>{categoria === "salgado" && <option value="componente">Massa/recheio</option>}</select>
+          <select className={selectClass} value={novoItem.tipo} onChange={(e) => setNovoItem({ ...novoItem, tipo: e.target.value, referencia_id: "" })}><option value="insumo">Insumo</option>{categoria === "salgado" && <option value="componente">Preparo</option>}</select>
           <select className={selectClass} value={novoItem.referencia_id} onChange={(e) => setNovoItem({ ...novoItem, referencia_id: e.target.value })}><option value="">Selecione</option>{novoItem.tipo === "insumo" ? insumos.map((i) => <option key={i.id} value={i.id}>{i.nome} · saldo {i.estoque_atual} {i.unidade}</option>) : fichas.filter((f) => ["massa","recheio"].includes(f.categoria)).map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}</select>
           <Input type="number" min="0.0001" step="0.001" placeholder="Quantidade" value={novoItem.quantidade} onChange={(e) => setNovoItem({ ...novoItem, quantidade: e.target.value })} />
           <select className={selectClass} value={novoItem.unidade} onChange={(e) => setNovoItem({ ...novoItem, unidade: e.target.value })}><option>g</option><option>kg</option><option>ml</option><option>l</option><option>un</option></select>
