@@ -72,7 +72,7 @@ export function EscalaView() {
     let ativo = true
     supabase.auth.getUser().then(({ data }: { data: { user: import("@supabase/supabase-js").User | null } }) => {
       if (!ativo) return
-      setPodeEditar(getPapel(data.user) !== "colaborador")
+      setPodeEditar(["admin", "financeiro", "socio"].includes(getPapel(data.user)))
       setPapelCarregado(true)
     })
     return () => {
@@ -174,8 +174,7 @@ export function EscalaView() {
       toast.success("Escala salva com sucesso.")
       setDraft({})
       mutate()
-    } catch (e) {
-      console.log("[v0] erro ao salvar escala:", e)
+    } catch {
       toast.error("Não foi possível salvar a escala.")
     } finally {
       setSaving(false)
@@ -271,34 +270,34 @@ export function EscalaView() {
                 ativos.map((c) => {
                   const total = totalDaSemana(c.id)
                   return (
-                  <TableRow key={c.id}>
-                    <TableCell className="sticky left-0 bg-card z-10 font-semibold">
-                      <span className="block truncate max-w-40">{c.nome}</span>
-                      {c.funcao && <span className="block text-xs font-normal text-muted-foreground">{c.funcao}</span>}
-                    </TableCell>
-                    {DIAS.map((d) => (
-                      <TableCell key={d.key} className="p-1">
-                        <Input
-                          value={getValue(c.id, d.key)}
-                          onChange={(e) => setValue(c.id, d.key, e.target.value)}
-                          readOnly={!podeEditar}
-                          placeholder={podeEditar ? "08:00–13:00 / 18:00–22:00" : "Sem horário"}
-                          className={`h-9 text-center text-xs ${!podeEditar ? "cursor-default border-transparent bg-transparent shadow-none focus-visible:ring-0" : ""}`}
-                          aria-label={`${c.nome}, ${d.label}: intervalos de horário${podeEditar ? "" : ", somente leitura"}`}
-                        />
+                    <TableRow key={c.id}>
+                      <TableCell className="sticky left-0 bg-card z-10 font-semibold">
+                        <span className="block truncate max-w-40">{c.nome}</span>
+                        {c.funcao && <span className="block text-xs font-normal text-muted-foreground">{c.funcao}</span>}
                       </TableCell>
-                    ))}
-                    <TableCell className="text-right">
-                      <span className="block whitespace-nowrap font-heading font-bold text-primary">
-                        {formatarTotalSemanal(total.minutos)}
-                      </span>
-                      {total.invalidos > 0 && (
-                        <span className="mt-1 block text-xs text-destructive">
-                          {total.invalidos} intervalo(s) inválido(s) ignorado(s)
+                      {DIAS.map((d) => (
+                        <TableCell key={d.key} className="p-1">
+                          <Input
+                            value={getValue(c.id, d.key)}
+                            onChange={(e) => setValue(c.id, d.key, e.target.value)}
+                            readOnly={!podeEditar}
+                            placeholder={podeEditar ? "08:00–13:00 / 18:00–22:00" : "Sem horário"}
+                            className={`h-9 text-center text-xs ${!podeEditar ? "cursor-default border-transparent bg-transparent shadow-none focus-visible:ring-0" : ""}`}
+                            aria-label={`${c.nome}, ${d.label}: intervalos de horário${podeEditar ? "" : ", somente leitura"}`}
+                          />
+                        </TableCell>
+                      ))}
+                      <TableCell className="text-right">
+                        <span className="block whitespace-nowrap font-heading font-bold text-primary">
+                          {formatarTotalSemanal(total.minutos)}
                         </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
+                        {total.invalidos > 0 && (
+                          <span className="mt-1 block text-xs text-destructive">
+                            {total.invalidos} intervalo(s) inválido(s) ignorado(s)
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
                   )
                 })
               )}
