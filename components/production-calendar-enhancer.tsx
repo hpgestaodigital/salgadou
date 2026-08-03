@@ -8,10 +8,10 @@ type ProdutoUnidade = { id: string; unidade: string }
 
 const UNIDADES: Record<string, string> = {
   un: "unidades",
-  kg: "kg",
-  g: "g",
-  l: "litros",
-  ml: "ml",
+  kg: "quilogramas (kg)",
+  g: "gramas (g)",
+  l: "litros (L)",
+  ml: "mililitros (ml)",
   pct: "pacotes",
   cx: "caixas",
 }
@@ -21,26 +21,84 @@ export function ProductionCalendarEnhancer() {
     const supabase = createClient()
     let produtos = new Map<string, string>()
     let observer: MutationObserver | null = null
+    let frame: number | null = null
+    let stopTimer: number | null = null
+
+    function localizarCard(titulo: string) {
+      const headings = Array.from(document.querySelectorAll<HTMLElement>("h1, h2, h3, [data-slot='card-title']"))
+      const heading = headings.find((item) => item.textContent?.trim() === titulo)
+      return heading?.closest<HTMLElement>("[data-slot='card'], .rounded-xl") ?? heading?.parentElement ?? null
+    }
 
     function localizarFormulario() {
-      const headings = Array.from(document.querySelectorAll<HTMLElement>("h1, h2, h3, [data-slot='card-title']"))
-      const heading = headings.find((item) => item.textContent?.trim() === "Programar produção")
-      const card = heading?.closest<HTMLElement>("[data-slot='card'], .rounded-xl") ?? heading?.parentElement
+      const card = localizarCard("Programar produção")
       if (!card) return null
       const dateInput = card.querySelector<HTMLInputElement>('input[type="date"]')
       const selects = Array.from(card.querySelectorAll<HTMLSelectElement>("select"))
       const produtoSelect = selects.find((select) => Array.from(select.options).some((option) => option.textContent?.trim() === "Selecione"))
-      const numberInputs = Array.from(card.querySelectorAll<HTMLInputElement>('input[type="number"]'))
-      const quantidadeInput = numberInputs[0]
+      const quantidadeInput = card.querySelector<HTMLInputElement>('input[type="number"]')
       return { card, dateInput, produtoSelect, quantidadeInput }
+    }
+
+    function simplificarCadastroInsumo() {
+      const card = localizarCard("Novo insumo")
+      if (!card || card.dataset.cleaned === "true") return
+
+      const content = card.querySelector<HTMLElement>("[data-slot='card-content']")
+      const inputs = Array.from(card.querySelectorAll<HTMLInputElement>("input"))
+      const select = card.querySelector<HTMLSelectElement>("select")
+      const nome = inputs.find((input) => input.type !== "number")
+      const numericos = inputs.filter((input) => input.type === "number")
+
+      numericos.forEach((input) => {
+        input.value = ""
+        input.closest<HTMLElement>("div")?.classList.add("hidden")
+        input.classList.add("hidden")
+        input.setAttribute("aria-hidden", "true")
+        input.tabIndex = -1
+      })
+
+      if (select) {
+        const opcoesPermitidas = new Set(["kg", "g", "l", "ml", "un"])
+        Array.from(select.options).forEach((option) => {
+          option.textContent = UNIDADES[option.value] || option.value
+          option.hidden = !opcoesPermitidas.has(option.value)
+          option.disabled = !opcoesPermitidas.has(option.value)
+        })
+        if (!opcoesPermitidas.has(select.value)) select.value = "kg"
+        select.setAttribute("aria-label", "Unidade usada para controlar o estoque")
+      }
+
+      nome?.setAttribute("placeholder", "Nome do insumo, ex.: Farinha de trigo")
+      if (content) {
+        content.classList.remove("sm:grid-cols-6")
+        content.classList.add("sm:grid-cols-[minmax(240px,1fr)_minmax(180px,240px)_auto]")
+        const ajuda = document.createElement("p")
+        ajuda.className = "text-xs text-muted-foreground sm:col-span-3"
+        ajuda.dataset.stockHelp = "true"
+        ajuda.textContent = "Cadastre apenas o nome e a unidade de controle. O saldo entra depois pelo botão de movimentação, mantendo o histórico correto."
+        content.appendChild(ajuda)
+      }
+
+      card.dataset.cleaned = "true"
+    }
+
+    function esconderBlocosLegados() {
+      ;["Caixas congeladas por produto", "Porções empacotadas por produto"].forEach((titulo) => {
+        const card = localizarCard(titulo)
+        if (card) card.classList.add("hidden")
+      })
     }
 
     function aplicarMelhorias() {
       const tabEstoque = Array.from(document.querySelectorAll<HTMLElement>("button, [role='tab']"))
-        .find((item) => item.textContent?.trim() === "Itens em estoque")
+        .find((item) => ["Itens em estoque", "Estoque de insumos"].includes(item.textContent?.trim() || ""))
       if (tabEstoque) tabEstoque.childNodes.forEach((node) => {
         if (node.nodeType === Node.TEXT_NODE && node.textContent?.includes("Itens em estoque")) node.textContent = "Estoque de insumos"
       })
+
+      simplificarCadastroInsumo()
+      esconderBlocosLegados()
 
       const formulario = localizarFormulario()
       if (!formulario) return
@@ -66,58 +124,68 @@ export function ProductionCalendarEnhancer() {
         quantidadeInput.parentElement?.appendChild(unidade)
       }
 
-      const atualizarUnidade = () => {
-        const codigo = produtos.get(produtoSelect.value) || ""
-        const rotulo = UNIDADES[codigo] || codigo
-        unidade!.textContent = rotulo ? `Quantidade planejada em ${rotulo}.` : "Selecione um produto para ver a unidade."
-        quantidadeInput.step = codigo === "un" || codigo === "pct" || codigo === "cx" ? "1" : "0.001"
-        quantidadeInput.setAttribute("aria-describedby", "production-unit-help")
-        unidade!.id = "production-unit-help"
-      }
-
-      if (produtoSelect.dataset.unitEnhanced !== "true") {
-        produtoSelect.dataset.unitEnhanced = "true"
-        produtoSelect.addEventListener("change", atualizarUnidade)
-      }
-      atualizarUnidade()
+      const codigo = produtos.get(produtoSelect.value) || ""
+      const rotulo = UNIDADES[codigo] || codigo
+      unidade.textContent = rotulo ? `Quantidade planejada em ${rotulo}.` : "Selecione um produto para ver a unidade."
+      quantidadeInput.step = codigo === "un" || codigo === "pct" || codigo === "cx" ? "1" : "0.001"
+      quantidadeInput.setAttribute("aria-describedby", "production-unit-help")
+      unidade.id = "production-unit-help"
     }
 
-    function handleClick(event: MouseEvent) {
+    function agendarMelhorias() {
+      if (frame !== null) return
+      frame = window.requestAnimationFrame(() => {
+        frame = null
+        aplicarMelhorias()
+      })
+    }
+
+    function handleInteraction(event: Event) {
       const target = event.target as HTMLElement | null
       const button = target?.closest("button")
-      if (!button || !button.textContent?.includes("Programar neste dia")) return
-
-      window.requestAnimationFrame(() => {
-        const formulario = localizarFormulario()
-        if (!formulario) {
-          toast.error("Não foi possível localizar o formulário de programação.")
-          return
-        }
-
-        formulario.card.scrollIntoView({ behavior: "smooth", block: "center" })
-        formulario.card.classList.add("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background")
-        formulario.dateInput?.focus({ preventScroll: true })
-        toast.success("Data selecionada. Escolha o produto e informe a quantidade na unidade indicada.")
-
-        window.setTimeout(() => {
-          formulario.card.classList.remove("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background")
-        }, 2200)
-      })
+      if (button?.textContent?.includes("Programar neste dia")) {
+        window.requestAnimationFrame(() => {
+          aplicarMelhorias()
+          const formulario = localizarFormulario()
+          if (!formulario) {
+            toast.error("Não foi possível localizar o formulário de programação.")
+            return
+          }
+          formulario.card.scrollIntoView({ behavior: "smooth", block: "center" })
+          formulario.card.classList.add("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background")
+          formulario.dateInput?.focus({ preventScroll: true })
+          toast.success("Data selecionada. Escolha o produto e informe a quantidade na unidade indicada.")
+          window.setTimeout(() => formulario.card.classList.remove("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background"), 2200)
+        })
+      } else {
+        agendarMelhorias()
+      }
     }
 
     async function iniciar() {
       const { data } = await supabase.from("producao_produtos").select("id, unidade").eq("ativo", true)
       produtos = new Map(((data ?? []) as ProdutoUnidade[]).map((produto) => [produto.id, produto.unidade]))
       aplicarMelhorias()
-      observer = new MutationObserver(() => aplicarMelhorias())
-      observer.observe(document.body, { childList: true, subtree: true })
+
+      const raiz = document.querySelector("main") ?? document.body
+      observer = new MutationObserver(agendarMelhorias)
+      observer.observe(raiz, { childList: true, subtree: true })
+      stopTimer = window.setTimeout(() => {
+        observer?.disconnect()
+        observer = null
+      }, 8000)
     }
 
     void iniciar()
-    document.addEventListener("click", handleClick, true)
+    document.addEventListener("click", handleInteraction, true)
+    document.addEventListener("change", handleInteraction, true)
+
     return () => {
       observer?.disconnect()
-      document.removeEventListener("click", handleClick, true)
+      if (frame !== null) window.cancelAnimationFrame(frame)
+      if (stopTimer !== null) window.clearTimeout(stopTimer)
+      document.removeEventListener("click", handleInteraction, true)
+      document.removeEventListener("change", handleInteraction, true)
     }
   }, [])
 
