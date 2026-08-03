@@ -32,18 +32,12 @@ const DESTINOS = [
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const publishableKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // Guard: if env vars are missing, return response without auth
-  if (!supabaseUrl || !publishableKey) {
-    return supabaseResponse
-  }
-
   const supabase = createServerClient(
-    supabaseUrl,
-    publishableKey,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    publishableKey!,
     {
       cookieOptions: { secure: process.env.NODE_ENV === "production" },
       cookies: {

@@ -1,8 +1,9 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useState } from "react"
 import { CalendarDays, ChevronLeft, ChevronRight, Eye } from "lucide-react"
 import { useTable } from "@/lib/use-data"
+import { todayISO } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,34 +31,15 @@ function chaveLocal(data: Date) {
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`
 }
 
-function formatarData(dataISO: string): string {
-  const [ano, mes, dia] = dataISO.split("-").map(Number)
-  const data = new Date(ano, mes - 1, dia, 0, 0, 0)
-  return data.toLocaleDateString("pt-BR", { dateStyle: "long" })
-}
-
 export function DashboardProductionCalendar() {
-  const [mes, setMes] = useState<Date | null>(null)
-  const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null)
-  const [montado, setMontado] = useState(false)
+  const hoje = todayISO()
+  const dataHoje = new Date(`${hoje}T12:00:00`)
+  const [mes, setMes] = useState(() => new Date(dataHoje.getFullYear(), dataHoje.getMonth(), 1))
+  const [diaSelecionado, setDiaSelecionado] = useState(hoje)
   const { data: planos } = useTable<PlanoProducao>("producao_planejamento", { column: "data_producao" })
   const { data: produtos } = useTable<ProdutoProducao>("producao_produtos", { column: "nome" })
 
-  // Initialize on client side to avoid hydration mismatch
-  useEffect(() => {
-    const agora = new Date()
-    const ano = agora.getFullYear()
-    const mesNumero = String(agora.getMonth() + 1).padStart(2, "0")
-    const dia = String(agora.getDate()).padStart(2, "0")
-    const hoje = `${ano}-${mesNumero}-${dia}`
-
-    setMes(new Date(ano, agora.getMonth(), 1))
-    setDiaSelecionado(hoje)
-    setMontado(true)
-  }, [])
-
   const dias = useMemo(() => {
-    if (!mes) return []
     const inicio = new Date(mes.getFullYear(), mes.getMonth(), 1)
     inicio.setDate(inicio.getDate() - inicio.getDay())
     return Array.from({ length: 42 }, (_, indice) => {
@@ -76,10 +58,9 @@ export function DashboardProductionCalendar() {
     return mapa
   }, [planos])
   const selecionados = planosPorDia.get(diaSelecionado) || []
-  const tituloMes = mes ? new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(mes) : ""
+  const tituloMes = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(mes)
 
   function navegar(direcao: number) {
-    if (!mes) return
     const novoMes = new Date(mes.getFullYear(), mes.getMonth() + direcao, 1)
     setMes(novoMes)
     setDiaSelecionado(chaveLocal(novoMes))
@@ -92,26 +73,25 @@ export function DashboardProductionCalendar() {
         <Badge variant="outline" className="gap-1.5"><Eye className="size-3.5" />Somente leitura</Badge>
       </div>
       <div className="mt-1 flex items-center justify-between gap-2 sm:justify-end">
-        <Button type="button" variant="outline" size="icon-sm" onClick={() => navegar(-1)} aria-label="Mês anterior" disabled={!montado}><ChevronLeft /></Button>
-        <p className="min-w-36 text-center text-sm font-semibold capitalize">{montado ? tituloMes : ""}</p>
-        <Button type="button" variant="outline" size="icon-sm" onClick={() => navegar(1)} aria-label="Próximo mês" disabled={!montado}><ChevronRight /></Button>
+        <Button type="button" variant="outline" size="icon-sm" onClick={() => navegar(-1)} aria-label="Mês anterior"><ChevronLeft /></Button>
+        <p className="min-w-36 text-center text-sm font-semibold capitalize">{tituloMes}</p>
+        <Button type="button" variant="outline" size="icon-sm" onClick={() => navegar(1)} aria-label="Próximo mês"><ChevronRight /></Button>
       </div>
     </CardHeader>
     <CardContent className="grid gap-3 p-3">
       <div className="overflow-x-auto"><div className="min-w-[420px]">
         <div className="grid grid-cols-7 pb-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((dia) => <div key={dia}>{dia}</div>)}</div>
-        <div className="grid grid-cols-7 gap-1">{montado && dias.map(({ data, chave, pertenceAoMes }) => {
+        <div className="grid grid-cols-7 gap-1">{dias.map(({ data, chave, pertenceAoMes }) => {
           const producoes = planosPorDia.get(chave) || []
           const primeiraProducao = producoes[0]
           const primeiroProduto = primeiraProducao ? produtosPorId.get(primeiraProducao.produto_id)?.nome || "Produção" : ""
-          const hojeDia = chaveLocal(new Date())
           return <button type="button" key={chave} onClick={() => setDiaSelecionado(chave)} className={cn("aspect-square rounded-lg border p-1.5 text-left transition-colors hover:border-primary/50 hover:bg-primary/5", chave === diaSelecionado && "border-primary bg-primary/10 ring-1 ring-primary", !pertenceAoMes && "opacity-40")}>
-            <span className={cn("inline-flex size-5 items-center justify-center rounded-full text-[10px] font-semibold", chave === hojeDia && "bg-primary text-primary-foreground")}>{data.getDate()}</span>
+            <span className={cn("inline-flex size-5 items-center justify-center rounded-full text-[10px] font-semibold", chave === hoje && "bg-primary text-primary-foreground")}>{data.getDate()}</span>
             {primeiraProducao && <div className="mt-1 rounded bg-primary/15 px-1 py-0.5" title={primeiroProduto}><span className="line-clamp-2 text-[10px] font-semibold leading-tight text-primary">{primeiroProduto}</span>{producoes.length > 1 && <span className="mt-0.5 block text-[9px] text-primary/80">+{producoes.length - 1}</span>}</div>}
           </button>
-        }) || <div className="col-span-7 h-32" />}</div>
+        })}</div>
       </div></div>
-      <aside className="rounded-lg border border-border/70 bg-background/35 p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{montado && diaSelecionado ? formatarData(diaSelecionado) : ""}</p>
+      <aside className="rounded-lg border border-border/70 bg-background/35 p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{new Date(`${diaSelecionado}T12:00:00`).toLocaleDateString("pt-BR", { dateStyle: "long" })}</p>
         <div className="mt-2 grid max-h-32 gap-2 overflow-auto sm:grid-cols-2">{selecionados.length ? selecionados.map((plano) => {
           const produto = produtosPorId.get(plano.produto_id)
           return <div key={plano.id} className="rounded-lg border border-border/70 p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-sm font-semibold">{produto?.nome || "Produção"}</p><Badge variant="secondary" className="text-[9px]">{STATUS[plano.status]}</Badge></div><p className="mt-0.5 text-xs text-muted-foreground">{Number(plano.quantidade).toLocaleString("pt-BR")} {produto?.unidade || "un"}</p></div>
