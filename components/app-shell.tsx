@@ -26,6 +26,7 @@ import {
   ShoppingCart,
   Snowflake,
   BookOpenText,
+  Soup,
   PlugZap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -45,6 +46,7 @@ const NAV = [
   { href: "/reunioes", label: "Reuniões", icon: MessagesSquare, modulo: "reunioes" as Modulo },
   { href: "/producao", label: "Produção", icon: Factory, modulo: "producao" as const },
   { href: "/receitas", label: "Ficha Técnica", icon: BookOpenText, modulo: "producao" as const },
+  { href: "/molhos", label: "Molhos", icon: Soup, modulo: "producao" as const },
   { href: "/estoque-salgadinhos", label: "Estoque de Salgadinhos", icon: Snowflake, modulo: "producao" as const },
   { href: "/integracoes", label: "Integrações", icon: PlugZap, modulo: "producao" as const },
   { href: "/mercado", label: "Mercado", icon: ShoppingCart, modulo: "mercado" as Modulo },

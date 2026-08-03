@@ -19,6 +19,14 @@ const ROTAS_MODULOS = [
   { prefixo: "/configuracoes", modulo: "configuracoes" },
 ] as const
 
+const ROTAS_PRODUCAO = [
+  "/producao",
+  "/receitas",
+  "/molhos",
+  "/estoque-salgadinhos",
+  "/integracoes",
+] as const
+
 const DESTINOS = [
   ["dashboard", "/"], ["escala", "/escala"], ["kanban", "/kanban"],
   ["reunioes", "/reunioes"], ["producao_planejamento", "/producao"],
@@ -71,6 +79,7 @@ export async function updateSession(request: NextRequest) {
     url.pathname = deveTrocarSenha ? "/auth/trocar-senha" : "/"
     return NextResponse.redirect(url)
   }
+
   if (
     user &&
     deveTrocarSenha &&
@@ -102,9 +111,23 @@ export async function updateSession(request: NextRequest) {
       for (const item of padrao ?? []) permissoes[item.modulo] = item.pode_visualizar
       for (const item of individuais ?? []) permissoes[item.modulo] = item.pode_visualizar
     } else {
-      const todos = papel === "admin" || papel === "financeiro" || papel === "socio"
-      for (const [modulo] of DESTINOS) permissoes[modulo] = todos
-      if (papel === "juridico") permissoes.juridico = true
+      // Em caso de indisponibilidade da matriz, evita conceder acesso total por perfil.
+      // O administrador mantém acesso de recuperação; os demais recebem apenas o mínimo funcional.
+      const administrador = papel === "admin"
+      for (const [modulo] of DESTINOS) permissoes[modulo] = administrador
+
+      if (papel === "socio") {
+        for (const modulo of ["dashboard", "kanban", "reunioes"]) permissoes[modulo] = true
+      }
+      if (papel === "financeiro") {
+        for (const modulo of ["dashboard", "financeiro", "pagamentos_fornecedores", "pagamentos_motoboys"]) {
+          permissoes[modulo] = true
+        }
+      }
+      if (papel === "juridico") {
+        permissoes.dashboard = true
+        permissoes.juridico = true
+      }
       if (papel === "colaborador") {
         for (const modulo of ["dashboard", "escala", "kanban"]) permissoes[modulo] = true
       }
@@ -114,8 +137,17 @@ export async function updateSession(request: NextRequest) {
       for (const modulo of ["dashboard", "escala", "kanban"]) permissoes[modulo] = true
     }
 
+    if (pathname.startsWith("/demonstracao") && papel !== "admin") {
+      const destino = DESTINOS.find(([modulo]) => permissoes[modulo])?.[1] || "/auth/sem-acesso"
+      const url = request.nextUrl.clone()
+      const [novoPath, query] = destino.split("?")
+      url.pathname = novoPath
+      url.search = query ? `?${query}` : ""
+      return NextResponse.redirect(url)
+    }
+
     let moduloAtual: string | null = pathname === "/" ? "dashboard" : null
-    if (pathname.startsWith("/producao")) {
+    if (ROTAS_PRODUCAO.some((rota) => pathname === rota || pathname.startsWith(`${rota}/`))) {
       moduloAtual = ["producao_compras", "producao_estoque", "producao_planejamento"]
         .some((modulo) => permissoes[modulo]) ? "producao" : "producao_bloqueada"
     } else {

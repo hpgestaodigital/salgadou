@@ -2,6 +2,19 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { enviarEvolution, evolutionConfigurada } from "@/lib/evolution/server"
 
+const MODULOS_VALIDACAO = [
+  "configuracoes",
+  "escala",
+  "pagamentos_fornecedores",
+  "pagamentos_motoboys",
+] as const
+
+const MODULOS_ENVIO_DIRETO = [
+  "configuracoes",
+  "pagamentos_fornecedores",
+  "pagamentos_motoboys",
+] as const
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()
@@ -17,6 +30,36 @@ export async function POST(request: Request) {
     if (!auth.user) {
       return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
     }
+
+    const papel = String(auth.user.app_metadata?.role || "colaborador")
+    const [{ data: padrao, error: padraoError }, { data: individual, error: individualError }] = await Promise.all([
+      supabase
+        .from("perfis_permissoes")
+        .select("modulo,pode_visualizar")
+        .eq("papel", papel)
+        .in("modulo", [...MODULOS_VALIDACAO]),
+      supabase
+        .from("usuarios_permissoes")
+        .select("modulo,pode_visualizar")
+        .eq("usuario_id", auth.user.id)
+        .in("modulo", [...MODULOS_VALIDACAO]),
+    ])
+
+    if (padraoError || individualError) {
+      return NextResponse.json({ error: "Não foi possível validar a permissão de envio." }, { status: 503 })
+    }
+
+    const permissoes = new Map<string, boolean>()
+    for (const item of padrao ?? []) permissoes.set(item.modulo, item.pode_visualizar)
+    for (const item of individual ?? []) permissoes.set(item.modulo, item.pode_visualizar)
+
+    const gestorEscala =
+      ["admin", "financeiro", "socio"].includes(papel) && permissoes.get("escala") === true
+    const moduloAutorizado = [...MODULOS_ENVIO_DIRETO].some((modulo) => permissoes.get(modulo) === true)
+    if (!gestorEscala && !moduloAutorizado) {
+      return NextResponse.json({ error: "Você não tem permissão para enviar mensagens." }, { status: 403 })
+    }
+
     const { data, error } = await supabase
       .from("configuracoes")
       .select("chave, valor")
@@ -39,8 +82,8 @@ export async function POST(request: Request) {
     await enviarEvolution(numero, mensagem, { url, instance })
 
     return NextResponse.json({ ok: true })
-  } catch (e) {
-    console.log("[v0] erro rota whatsapp:", e)
+  } catch (error) {
+    console.error("Erro na rota de envio do WhatsApp:", error)
     return NextResponse.json({ error: "Erro interno ao processar o envio." }, { status: 500 })
   }
 }

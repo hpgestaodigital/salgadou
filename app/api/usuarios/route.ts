@@ -8,8 +8,29 @@ async function exigirGestorAcesso() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
+
+  if (!user) return { ok: false, user: null, papel: "colaborador" as Papel }
+
   const papel = getPapel(user)
-  return { ok: papel === "admin" || papel === "financeiro" || papel === "socio", user, papel }
+  const [{ data: individual, error: individualError }, { data: padrao, error: padraoError }] = await Promise.all([
+    supabase
+      .from("usuarios_permissoes")
+      .select("pode_visualizar")
+      .eq("usuario_id", user.id)
+      .eq("modulo", "usuarios")
+      .maybeSingle(),
+    supabase
+      .from("perfis_permissoes")
+      .select("pode_visualizar")
+      .eq("papel", papel)
+      .eq("modulo", "usuarios")
+      .maybeSingle(),
+  ])
+
+  if (individualError || padraoError) return { ok: false, user, papel }
+
+  const permitido = individual?.pode_visualizar ?? padrao?.pode_visualizar ?? false
+  return { ok: Boolean(permitido), user, papel }
 }
 
 function tratarErroServico(e: unknown) {
@@ -22,7 +43,7 @@ function tratarErroServico(e: unknown) {
       { status: 503 },
     )
   }
-  console.log("[v0] erro api usuarios:", e)
+  console.error("Erro na API de usuários:", e)
   return NextResponse.json({ error: "Erro ao processar a solicitação." }, { status: 500 })
 }
 
@@ -40,14 +61,14 @@ export async function GET() {
     if (vinculosError && !["42P01", "PGRST205"].includes(vinculosError.code)) throw vinculosError
 
     const usuarios = data.users.map((u) => ({
-  id: u.id,
-  email: u.email,
-  nome: (u.user_metadata?.nome as string) || "",
-  papel: (u.email === ADMIN_EMAIL ? "admin" : (u.app_metadata?.role as string)) || "colaborador",
-  criado_em: u.created_at,
-  colaborador_id: vinculos?.find((v) => v.usuario_id === u.id)?.colaborador_id ?? null,
-  deve_trocar_senha: u.app_metadata?.must_change_password === true,
-}))
+      id: u.id,
+      email: u.email,
+      nome: (u.user_metadata?.nome as string) || "",
+      papel: (u.email === ADMIN_EMAIL ? "admin" : (u.app_metadata?.role as string)) || "colaborador",
+      criado_em: u.created_at,
+      colaborador_id: vinculos?.find((v) => v.usuario_id === u.id)?.colaborador_id ?? null,
+      deve_trocar_senha: u.app_metadata?.must_change_password === true,
+    }))
     return NextResponse.json({ usuarios })
   } catch (e) {
     return tratarErroServico(e)
@@ -67,23 +88,44 @@ export async function PATCH(request: Request) {
     }
 
     const admin = createAdminClient()
-    const { data: pessoas, error: pessoaError } = await admin.from("colaboradores").select("id, nome").eq("ativo", true).ilike("nome", nome).limit(2)
+    const { data: pessoas, error: pessoaError } = await admin
+      .from("colaboradores")
+      .select("id, nome")
+      .eq("ativo", true)
+      .ilike("nome", nome)
+      .limit(2)
     if (pessoaError) throw pessoaError
+
     const pessoa = pessoas?.length === 1 ? pessoas[0] : null
     if (pessoa) {
-      const { data: existente } = await admin.from("usuarios_vinculos").select("usuario_id").eq("colaborador_id", pessoa.id).maybeSingle()
-      if (existente && existente.usuario_id !== usuarioId) return NextResponse.json({ error: "Este cadastro já pertence a outro usuário." }, { status: 409 })
+      const { data: existente } = await admin
+        .from("usuarios_vinculos")
+        .select("usuario_id")
+        .eq("colaborador_id", pessoa.id)
+        .maybeSingle()
+      if (existente && existente.usuario_id !== usuarioId) {
+        return NextResponse.json({ error: "Este cadastro já pertence a outro usuário." }, { status: 409 })
+      }
     }
+
     const { data: usuarioAtual, error: usuarioError } = await admin.auth.admin.getUserById(usuarioId)
     if (usuarioError) throw usuarioError
-    const { error: nomeError } = await admin.auth.admin.updateUserById(usuarioId, { user_metadata: { ...usuarioAtual.user.user_metadata, nome } })
+
+    const { error: nomeError } = await admin.auth.admin.updateUserById(usuarioId, {
+      user_metadata: { ...usuarioAtual.user.user_metadata, nome },
+    })
     if (nomeError) throw nomeError
+
     const { error: clearError } = await admin.from("usuarios_vinculos").delete().eq("usuario_id", usuarioId)
     if (clearError) throw clearError
+
     if (pessoa) {
-      const { error: linkError } = await admin.from("usuarios_vinculos").insert({ usuario_id: usuarioId, colaborador_id: pessoa.id })
+      const { error: linkError } = await admin
+        .from("usuarios_vinculos")
+        .insert({ usuario_id: usuarioId, colaborador_id: pessoa.id })
       if (linkError) throw linkError
     }
+
     return NextResponse.json({ ok: true })
   } catch (e) {
     return tratarErroServico(e)
@@ -107,8 +149,8 @@ export async function POST(request: Request) {
     if (!["financeiro", "socio", "colaborador", "juridico"].includes(papel)) {
       return NextResponse.json({ error: "Papel de usuário inválido." }, { status: 400 })
     }
-    if (senha.length < 6) {
-      return NextResponse.json({ error: "A senha deve ter ao menos 6 caracteres." }, { status: 400 })
+    if (senha.length < 8) {
+      return NextResponse.json({ error: "A senha temporária deve ter ao menos 8 caracteres." }, { status: 400 })
     }
 
     const admin = createAdminClient()
@@ -118,9 +160,9 @@ export async function POST(request: Request) {
       email_confirm: true,
       user_metadata: { nome },
       app_metadata: {
-  role: papel,
-  must_change_password: true,
-},
+        role: papel,
+        must_change_password: true,
+      },
     })
     if (error) {
       const msg = error.message.toLowerCase()
@@ -129,10 +171,21 @@ export async function POST(request: Request) {
       }
       throw error
     }
-    const { data: pessoas } = await admin.from("colaboradores").select("id").eq("ativo", true).ilike("nome", nome).limit(2)
+
+    const { data: pessoas } = await admin
+      .from("colaboradores")
+      .select("id")
+      .eq("ativo", true)
+      .ilike("nome", nome)
+      .limit(2)
+
     if (criado.user && pessoas?.length === 1) {
-      await admin.from("usuarios_vinculos").insert({ usuario_id: criado.user.id, colaborador_id: pessoas[0].id })
+      await admin.from("usuarios_vinculos").insert({
+        usuario_id: criado.user.id,
+        colaborador_id: pessoas[0].id,
+      })
     }
+
     return NextResponse.json({ ok: true })
   } catch (e) {
     return tratarErroServico(e)
@@ -152,8 +205,6 @@ export async function DELETE(request: Request) {
     }
 
     const admin = createAdminClient()
-
-    // Não permite excluir o administrador padrão.
     const { data: alvo } = await admin.auth.admin.getUserById(id)
     if (alvo?.user?.email === ADMIN_EMAIL) {
       return NextResponse.json({ error: "O administrador padrão não pode ser excluído." }, { status: 400 })

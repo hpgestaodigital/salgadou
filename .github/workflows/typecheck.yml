@@ -1,0 +1,45 @@
+name: Qualidade
+
+on:
+  pull_request:
+  push:
+    branches:
+      - fix/prelaunch-production-loading
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SUPABASE_URL: "https://build-check.supabase.co"
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "build-check-key"
+      SUPABASE_SERVICE_ROLE_KEY: "build-check-service-role"
+      CRON_SECRET: "build-check-cron-secret"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.28.0 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level=high
+
+      - name: Type check
+        run: pnpm exec tsc --noEmit
+
+      - name: Static checks
+        run: pnpm run lint
+
+      - name: Production build
+        run: pnpm run build

@@ -1,14 +1,23 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Loader2, RotateCcw } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { Loader2, RotateCcw, Save } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
-type InsumoResumo = { id: string; nome: string; unidade: string }
+type InsumoResumo = {
+  id: string
+  nome: string
+  unidade: string
+  unidade_alternativa?: string | null
+  fator_unidade_alternativa?: number | null
+}
+
 type Movimentacao = {
   id: string
   insumo_id: string
@@ -37,6 +46,8 @@ const TIPOS: Record<string, string> = {
   perda: "Perda",
 }
 
+const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+
 export function EstoqueMovimentacoes({ insumos, refreshKey, onUpdated }: {
   insumos: InsumoResumo[]
   refreshKey: string
@@ -46,6 +57,12 @@ export function EstoqueMovimentacoes({ insumos, refreshKey, onUpdated }: {
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState("")
+  const [contagem, setContagem] = useState({ insumo_id: "", quantidade: "", unidade: "" })
+
+  const insumoContagem = useMemo(
+    () => insumos.find((item) => item.id === contagem.insumo_id),
+    [insumos, contagem.insumo_id],
+  )
 
   async function carregar() {
     setLoading(true)
@@ -60,6 +77,54 @@ export function EstoqueMovimentacoes({ insumos, refreshKey, onUpdated }: {
   }
 
   useEffect(() => { void carregar() }, [refreshKey])
+
+  useEffect(() => {
+    if (!contagem.insumo_id && insumos.length > 0) {
+      setContagem({ insumo_id: insumos[0].id, quantidade: "", unidade: insumos[0].unidade })
+      return
+    }
+    if (contagem.insumo_id && !insumos.some((item) => item.id === contagem.insumo_id)) {
+      const primeiro = insumos[0]
+      setContagem({ insumo_id: primeiro?.id ?? "", quantidade: "", unidade: primeiro?.unidade ?? "" })
+    }
+  }, [insumos, contagem.insumo_id])
+
+  function selecionarInsumo(insumoId: string) {
+    const insumo = insumos.find((item) => item.id === insumoId)
+    setContagem({ insumo_id: insumoId, quantidade: "", unidade: insumo?.unidade ?? "" })
+  }
+
+  async function registrarSaldoContado() {
+    if (!insumoContagem) return toast.error("Selecione o insumo.")
+    const quantidade = Number(contagem.quantidade)
+    if (!Number.isFinite(quantidade) || quantidade < 0) return toast.error("Informe um saldo contado válido.")
+
+    const motivo = window.prompt(`Informe o motivo do ajuste de ${insumoContagem.nome}:`, "Contagem física de estoque")
+    if (!motivo?.trim()) return
+
+    setSavingId("contagem")
+    try {
+      const { error } = await supabase.rpc("ajustar_estoque_insumo_convertido", {
+        insumo_id_param: insumoContagem.id,
+        novo_saldo_param: quantidade,
+        unidade_informada_param: contagem.unidade || insumoContagem.unidade,
+        motivo_param: motivo.trim(),
+        observacoes_param: null,
+      })
+      if (error) throw error
+      toast.success("Saldo contado convertido e registrado no extrato.")
+      setContagem((atual) => ({ ...atual, quantidade: "" }))
+      await onUpdated()
+      await carregar()
+    } catch (error) {
+      const mensagem = error && typeof error === "object" && "message" in error
+        ? String(error.message)
+        : "Não foi possível registrar a contagem."
+      toast.error(mensagem)
+    } finally {
+      setSavingId("")
+    }
+  }
 
   async function estornar(movimentacao: Movimentacao) {
     const motivo = window.prompt("Informe o motivo do estorno:")
@@ -87,62 +152,103 @@ export function EstoqueMovimentacoes({ insumos, refreshKey, onUpdated }: {
   }
 
   const idsEstornados = new Set(movimentacoes.map((item) => item.movimento_estornado_id).filter(Boolean))
+  const fatorAlternativo = Number(insumoContagem?.fator_unidade_alternativa ?? 0)
+  const quantidadeConvertida = contagem.unidade === insumoContagem?.unidade_alternativa && fatorAlternativo > 0 && Number.isFinite(Number(contagem.quantidade))
+    ? Number(contagem.quantidade || 0) * fatorAlternativo
+    : null
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Extrato de movimentações</CardTitle>
-        <p className="text-sm text-muted-foreground">Entradas, consumos, ajustes e estornos com o saldo antes e depois de cada operação.</p>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="mr-2 size-4 animate-spin" />Carregando extrato...</div>
-        ) : movimentacoes.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nenhuma movimentação registrada.</p>
-        ) : (
-          <div className="grid gap-2">
-            {movimentacoes.map((movimentacao) => {
-              const insumo = insumos.find((item) => item.id === movimentacao.insumo_id)
-              const positiva = Number(movimentacao.quantidade) > 0
-              const foiEstornada = idsEstornados.has(movimentacao.id)
-              const podeEstornar = movimentacao.tipo !== "estorno" && !foiEstornada
-              return (
-                <div key={movimentacao.id} className="rounded-xl border p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold">{insumo?.nome || "Insumo"}</p>
-                        <Badge variant={positiva ? "secondary" : "outline"}>{TIPOS[movimentacao.tipo] || movimentacao.tipo}</Badge>
-                        {foiEstornada && <Badge variant="outline">Estornada</Badge>}
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(movimentacao.created_at))}
-                        {movimentacao.origem_tipo ? ` · ${movimentacao.origem_tipo.replaceAll("_", " ")}` : ""}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`font-bold tabular-nums ${positiva ? "text-emerald-500" : "text-amber-500"}`}>
-                        {positiva ? "+" : ""}{movimentacao.quantidade} {insumo?.unidade || ""}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{movimentacao.saldo_anterior} → {movimentacao.saldo_posterior}</p>
-                    </div>
-                  </div>
-                  {(movimentacao.motivo || movimentacao.observacoes) && <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
-                    {movimentacao.motivo && <p><strong className="text-foreground">Motivo:</strong> {movimentacao.motivo}</p>}
-                    {movimentacao.observacoes && <p><strong className="text-foreground">Observações:</strong> {movimentacao.observacoes}</p>}
-                  </div>}
-                  {podeEstornar && <div className="mt-2 flex justify-end">
-                    <Button type="button" size="sm" variant="ghost" disabled={savingId === movimentacao.id} onClick={() => estornar(movimentacao)}>
-                      {savingId === movimentacao.id ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
-                      Estornar
-                    </Button>
-                  </div>}
-                </div>
-              )
-            })}
+    <div className="grid gap-5">
+      <Card className="border-primary/25">
+        <CardHeader>
+          <CardTitle>Contagem em kg ou unidade alternativa</CardTitle>
+          <p className="text-sm text-muted-foreground">O saldo é armazenado na unidade base, mas pode ser informado por peça quando houver uma conversão cadastrada.</p>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-[1.4fr_1fr_150px_auto] md:items-end">
+          <div>
+            <Label>Insumo</Label>
+            <select className={selectClass + " mt-1"} value={contagem.insumo_id} onChange={(event) => selecionarInsumo(event.target.value)}>
+              <option value="">Selecione</option>
+              {insumos.map((insumo) => <option key={insumo.id} value={insumo.id}>{insumo.nome}</option>)}
+            </select>
           </div>
-        )}
-      </CardContent>
-    </Card>
+          <div>
+            <Label>Saldo contado</Label>
+            <Input className="mt-1" type="number" min="0" step="0.001" value={contagem.quantidade} onChange={(event) => setContagem((atual) => ({ ...atual, quantidade: event.target.value }))} />
+          </div>
+          <div>
+            <Label>Unidade informada</Label>
+            <select className={selectClass + " mt-1"} value={contagem.unidade} onChange={(event) => setContagem((atual) => ({ ...atual, unidade: event.target.value }))} disabled={!insumoContagem}>
+              {insumoContagem && <option value={insumoContagem.unidade}>{insumoContagem.unidade}</option>}
+              {insumoContagem?.unidade_alternativa && <option value={insumoContagem.unidade_alternativa}>{insumoContagem.unidade_alternativa}</option>}
+            </select>
+          </div>
+          <Button disabled={savingId === "contagem" || !insumoContagem} onClick={registrarSaldoContado}>
+            {savingId === "contagem" ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+            Registrar saldo
+          </Button>
+          {insumoContagem?.unidade_alternativa && fatorAlternativo > 0 && <p className="text-xs text-muted-foreground md:col-span-4">
+            Conversão de {insumoContagem.nome}: 1 {insumoContagem.unidade_alternativa} ≈ {fatorAlternativo} {insumoContagem.unidade}.
+            {quantidadeConvertida !== null ? ` A contagem informada equivale a ${quantidadeConvertida.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} ${insumoContagem.unidade}.` : ""}
+          </p>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Extrato de movimentações</CardTitle>
+          <p className="text-sm text-muted-foreground">Entradas, consumos, ajustes e estornos com o saldo antes e depois de cada operação.</p>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="mr-2 size-4 animate-spin" />Carregando extrato...</div>
+          ) : movimentacoes.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nenhuma movimentação registrada.</p>
+          ) : (
+            <div className="grid gap-2">
+              {movimentacoes.map((movimentacao) => {
+                const insumo = insumos.find((item) => item.id === movimentacao.insumo_id)
+                const positiva = Number(movimentacao.quantidade) > 0
+                const foiEstornada = idsEstornados.has(movimentacao.id)
+                const podeEstornar = movimentacao.tipo !== "estorno" && !foiEstornada
+                return (
+                  <div key={movimentacao.id} className="rounded-xl border p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold">{insumo?.nome || "Insumo"}</p>
+                          <Badge variant={positiva ? "secondary" : "outline"}>{TIPOS[movimentacao.tipo] || movimentacao.tipo}</Badge>
+                          {foiEstornada && <Badge variant="outline">Estornada</Badge>}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(movimentacao.created_at))}
+                          {movimentacao.origem_tipo ? ` · ${movimentacao.origem_tipo.replaceAll("_", " ")}` : ""}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-bold tabular-nums ${positiva ? "text-emerald-500" : "text-amber-500"}`}>
+                          {positiva ? "+" : ""}{movimentacao.quantidade} {insumo?.unidade || ""}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{movimentacao.saldo_anterior} → {movimentacao.saldo_posterior}</p>
+                      </div>
+                    </div>
+                    {(movimentacao.motivo || movimentacao.observacoes) && <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
+                      {movimentacao.motivo && <p><strong className="text-foreground">Motivo:</strong> {movimentacao.motivo}</p>}
+                      {movimentacao.observacoes && <p><strong className="text-foreground">Observações:</strong> {movimentacao.observacoes}</p>}
+                    </div>}
+                    {podeEstornar && <div className="mt-2 flex justify-end">
+                      <Button type="button" size="sm" variant="ghost" disabled={savingId === movimentacao.id} onClick={() => estornar(movimentacao)}>
+                        {savingId === movimentacao.id ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+                        Estornar
+                      </Button>
+                    </div>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }

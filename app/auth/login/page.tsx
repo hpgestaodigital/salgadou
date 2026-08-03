@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
 import Link from "next/link"
 import { Loader2, LogIn, UtensilsCrossed } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
@@ -11,17 +10,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 export default function LoginPage() {
-  const router = useRouter()
   const supabase = createClient()
 
   const [email, setEmail] = useState("")
   const [senha, setSenha] = useState("")
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch("/api/auth/ensure-admin", { method: "POST" }).catch(() => {})
-  }, [])
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault()
@@ -39,8 +33,10 @@ export default function LoginPage() {
         }
         return
       }
-      router.replace("/")
-      router.refresh()
+
+      // Uma recarga completa impede que dados em cache da conta anterior sejam reutilizados
+      // quando o mesmo computador é compartilhado por pessoas diferentes.
+      window.location.replace("/")
     } catch {
       setErro("Erro inesperado ao entrar.")
     } finally {

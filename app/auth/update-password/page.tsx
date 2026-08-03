@@ -40,8 +40,8 @@ export default function UpdatePasswordPage() {
     e.preventDefault()
     setErro(null)
 
-    if (senha.length < 8) {
-      setErro("A nova senha precisa ter pelo menos 8 caracteres.")
+    if (senha.length < 8 || senha.length > 128) {
+      setErro("A nova senha precisa ter entre 8 e 128 caracteres.")
       return
     }
     if (senha !== confirmacao) {
@@ -51,11 +51,17 @@ export default function UpdatePasswordPage() {
 
     setCarregando(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password: senha })
-      if (error) {
-        setErro("O link é inválido ou expirou. Solicite um novo e-mail de recuperação.")
+      const resposta = await fetch("/api/auth/trocar-senha", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ novaSenha: senha }),
+      })
+      if (!resposta.ok) {
+        const json = await resposta.json().catch(() => null)
+        setErro(json?.error || "O link é inválido ou expirou. Solicite um novo e-mail de recuperação.")
         return
       }
+
       setConcluido(true)
       await supabase.auth.signOut()
     } catch {
@@ -97,13 +103,29 @@ export default function UpdatePasswordPage() {
               <form onSubmit={atualizar} className="grid gap-4">
                 <div className="grid gap-1.5">
                   <Label htmlFor="senha">Nova senha</Label>
-                  <Input id="senha" type="password" autoComplete="new-password" value={senha}
-                    onChange={(e) => setSenha(e.target.value)} minLength={8} required />
+                  <Input
+                    id="senha"
+                    type="password"
+                    autoComplete="new-password"
+                    value={senha}
+                    onChange={(e) => setSenha(e.target.value)}
+                    minLength={8}
+                    maxLength={128}
+                    required
+                  />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="confirmacao">Confirmar nova senha</Label>
-                  <Input id="confirmacao" type="password" autoComplete="new-password" value={confirmacao}
-                    onChange={(e) => setConfirmacao(e.target.value)} minLength={8} required />
+                  <Input
+                    id="confirmacao"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmacao}
+                    onChange={(e) => setConfirmacao(e.target.value)}
+                    minLength={8}
+                    maxLength={128}
+                    required
+                  />
                 </div>
 
                 {erro && <p className="text-sm text-destructive" role="alert">{erro}</p>}
