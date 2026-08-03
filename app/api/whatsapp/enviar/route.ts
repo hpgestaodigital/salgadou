@@ -2,6 +2,13 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { enviarEvolution, evolutionConfigurada } from "@/lib/evolution/server"
 
+const MODULOS_ENVIO = [
+  "configuracoes",
+  "escala",
+  "pagamentos_fornecedores",
+  "pagamentos_motoboys",
+] as const
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()
@@ -17,6 +24,33 @@ export async function POST(request: Request) {
     if (!auth.user) {
       return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
     }
+
+    const papel = String(auth.user.app_metadata?.role || "colaborador")
+    const [{ data: padrao, error: padraoError }, { data: individual, error: individualError }] = await Promise.all([
+      supabase
+        .from("perfis_permissoes")
+        .select("modulo,pode_visualizar")
+        .eq("papel", papel)
+        .in("modulo", [...MODULOS_ENVIO]),
+      supabase
+        .from("usuarios_permissoes")
+        .select("modulo,pode_visualizar")
+        .eq("usuario_id", auth.user.id)
+        .in("modulo", [...MODULOS_ENVIO]),
+    ])
+
+    if (padraoError || individualError) {
+      return NextResponse.json({ error: "Não foi possível validar a permissão de envio." }, { status: 503 })
+    }
+
+    const permissoes = new Map<string, boolean>()
+    for (const item of padrao ?? []) permissoes.set(item.modulo, item.pode_visualizar)
+    for (const item of individual ?? []) permissoes.set(item.modulo, item.pode_visualizar)
+
+    if (![...MODULOS_ENVIO].some((modulo) => permissoes.get(modulo) === true)) {
+      return NextResponse.json({ error: "Você não tem permissão para enviar mensagens." }, { status: 403 })
+    }
+
     const { data, error } = await supabase
       .from("configuracoes")
       .select("chave, valor")
