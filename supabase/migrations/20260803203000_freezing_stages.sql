@@ -22,16 +22,16 @@ begin
   end if;
 end $$;
 
-alter table public.producao_lotes
-  add constraint producao_lotes_status_check
-  check (status in ('em_congelamento', 'aguardando_empacotamento', 'empacotado', 'encerrado'));
-
 -- Lotes antigos marcados apenas como congelados já estavam disponíveis para empacotamento.
 update public.producao_lotes
 set status = 'aguardando_empacotamento',
     congelamento_iniciado_em = coalesce(congelamento_iniciado_em, created_at),
     congelado_em = coalesce(congelado_em, updated_at)
 where status = 'congelado';
+
+alter table public.producao_lotes
+  add constraint producao_lotes_status_check
+  check (status in ('em_congelamento', 'aguardando_empacotamento', 'empacotado', 'encerrado'));
 
 create or replace function private.normalizar_novo_lote_congelamento()
 returns trigger
@@ -40,7 +40,7 @@ security definer
 set search_path = pg_catalog, public, private
 as $$
 begin
-  -- A RPC antiga insere como "congelado". O trigger converte para o novo primeiro estágio.
+  -- A RPC atual insere como "congelado". O trigger converte para o novo primeiro estágio.
   if new.status = 'congelado' then
     new.status := 'em_congelamento';
   end if;
