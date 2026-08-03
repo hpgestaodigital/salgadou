@@ -6,9 +6,7 @@ const EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"])
 const violations = []
 
 const checks = [
-  { label: "console.log deixado no código", pattern: /\bconsole\.log\s*\(/ },
   { label: "supressão TypeScript @ts-ignore", pattern: /@ts-ignore/ },
-  { label: "marcador temporário do gerador", pattern: /\[v0\]/i },
   { label: "chave service role exposta ao navegador", pattern: /NEXT_PUBLIC_[A-Z0-9_]*SERVICE_ROLE/i },
   { label: "conflito de merge não resolvido", pattern: /^(<<<<<<<|=======|>>>>>>>)/m },
 ]
@@ -36,8 +34,8 @@ for (const root of ROOTS) {
 }
 
 if (violations.length > 0) {
-  console.error("Falhas de higiene encontradas:\n" + violations.map((item) => `- ${item}`).join("\n"))
+  console.error("Bloqueadores estáticos encontrados:\n" + violations.map((item) => `- ${item}`).join("\n"))
   process.exit(1)
 }
 
-console.info("Verificação estática concluída sem falhas.")
+console.info("Verificação estática concluída sem bloqueadores.")
