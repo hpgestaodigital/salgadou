@@ -22,6 +22,7 @@ const ROTAS_MODULOS = [
 const ROTAS_PRODUCAO = [
   "/producao",
   "/receitas",
+  "/molhos",
   "/estoque-salgadinhos",
   "/integracoes",
 ] as const
