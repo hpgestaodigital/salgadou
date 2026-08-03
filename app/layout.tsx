@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next"
 import { Nunito, Nunito_Sans } from "next/font/google"
 import { Toaster } from "@/components/ui/sonner"
 import { AppShell } from "@/components/app-shell"
+import { InterfaceLabelOverrides } from "@/components/interface-label-overrides"
 import "./globals.css"
 
 const nunito = Nunito({
@@ -39,6 +40,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={`dark bg-background ${nunito.variable} ${nunitoSans.variable}`}>
       <body className="antialiased font-body">
+        <InterfaceLabelOverrides />
         <AppShell>{children}</AppShell>
         <Toaster richColors position="top-right" />
         {process.env.NODE_ENV === "production" && <Analytics />}
