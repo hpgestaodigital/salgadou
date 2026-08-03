@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Link2, Loader2 } from "lucide-react"
+import { CheckCircle2, Link2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
@@ -13,6 +13,10 @@ type Ficha = { id: string; nome: string; rendimento_padrao: number; unidade_rend
 type Necessidade = { data_producao: string; insumo: string; unidade: string; quantidade_necessaria: number; estoque_atual: number; quantidade_a_comprar: number }
 
 const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+
+function normalizarNome(valor: string) {
+  return valor.trim().toLocaleLowerCase("pt-BR")
+}
 
 export function ChainPlanningMapping() {
   const supabase = createClient()
@@ -61,7 +65,7 @@ export function ChainPlanningMapping() {
   return <Card className="mb-6 border-primary/25">
     <CardHeader>
       <CardTitle>Planejamento por ficha técnica</CardTitle>
-      <p className="text-sm text-muted-foreground">Ligue cada produto do calendário à sua ficha de salgado. A necessidade de compras passa a descer pela cadeia salgado → massa/recheio → ingredientes, descontando o estoque intermediário disponível.</p>
+      <p className="text-sm text-muted-foreground">Vincule cada produto do calendário à ficha do salgado final. O sistema consolida ingredientes compartilhados e calcula a cadeia salgado → massa/recheio → ingredientes, descontando o estoque intermediário uma única vez.</p>
     </CardHeader>
     <CardContent className="space-y-5">
       <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
@@ -70,7 +74,14 @@ export function ChainPlanningMapping() {
         <Button disabled={saving} onClick={vincular}><Link2 className="size-4" />Vincular</Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">{vinculados.length === 0 ? <span className="text-sm text-muted-foreground">Nenhum produto ligado a uma ficha nova.</span> : vinculados.map((produto) => { const ficha = fichas.find((item) => item.id === produto.ficha_tecnica_id); return <Badge key={produto.id} variant="secondary">{produto.nome} → {ficha?.nome ?? "Ficha"}</Badge> })}</div>
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Produtos já vinculados</p>
+        <div className="flex flex-wrap gap-2">{vinculados.length === 0 ? <span className="text-sm text-muted-foreground">Nenhum produto ligado a uma ficha técnica.</span> : vinculados.map((produto) => {
+          const ficha = fichas.find((item) => item.id === produto.ficha_tecnica_id)
+          const mesmoNome = ficha ? normalizarNome(produto.nome) === normalizarNome(ficha.nome) : false
+          return <Badge key={produto.id} variant="secondary" className="gap-1.5"><CheckCircle2 className="size-3.5" />{mesmoNome ? `${produto.nome} vinculado` : `${produto.nome} · ficha: ${ficha?.nome ?? "não encontrada"}`}</Badge>
+        })}</div>
+      </div>
 
       {datas.length > 0 && <div className="space-y-3"><h3 className="font-semibold">Necessidades calculadas</h3>{datas.map((data) => <div key={data} className="rounded-xl border p-3"><p className="mb-2 text-sm font-semibold">{new Date(data + "T12:00:00").toLocaleDateString("pt-BR")}</p><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{necessidades.filter((item) => item.data_producao === data).map((item) => <div key={`${data}-${item.insumo}`} className="rounded-lg bg-muted/30 p-2 text-sm"><div className="flex justify-between gap-3"><span>{item.insumo}</span><strong>{Number(item.quantidade_necessaria).toLocaleString("pt-BR")} {item.unidade}</strong></div><p className="text-xs text-muted-foreground">Estoque: {Number(item.estoque_atual).toLocaleString("pt-BR")} · Comprar: {Number(item.quantidade_a_comprar).toLocaleString("pt-BR")}</p></div>)}</div></div>)}</div>}
     </CardContent>
