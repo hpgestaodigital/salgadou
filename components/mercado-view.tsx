@@ -61,7 +61,6 @@ function novoItem(): ItemForm {
   return { id: crypto.randomUUID(), insumo_id: "", quantidade_comprada: "", preco_unitario: "" }
 }
 
-// ─── Componente de anexo (suporta PDF, JPG, JPEG, PNG) ───────────────────────
 function AnexoField({
   notaPath,
   onChange,
@@ -114,7 +113,7 @@ function AnexoField({
       if (notaPath) await supabase.storage.from("erp-payment-attachments").remove([notaPath])
       onChange(storagePath)
       toast.success("Nota anexada.")
-    } catch (err) {
+    } catch {
       toast.error("Não foi possível anexar o arquivo.")
     } finally {
       setUploading(false)
@@ -136,22 +135,13 @@ function AnexoField({
             <FileText className="size-8 shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate">PDF anexado</p>
-              <a
-                href={previewUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-primary underline underline-offset-2"
-              >
+              <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline underline-offset-2">
                 Visualizar
               </a>
             </div>
           </div>
         ) : (
-          <img
-            src={previewUrl}
-            alt="Nota fiscal"
-            className="h-36 w-full rounded-lg bg-muted object-contain"
-          />
+          <img src={previewUrl} alt="Nota fiscal" className="h-36 w-full rounded-lg bg-muted object-contain" />
         )
       ) : (
         <div className="grid h-20 place-items-center rounded-lg bg-muted/40 text-muted-foreground">
@@ -188,7 +178,6 @@ function AnexoField({
   )
 }
 
-// ─── Aba: Nova Compra ─────────────────────────────────────────────────────────
 function NovaCompra({
   fornecedores,
   insumos,
@@ -225,7 +214,7 @@ function NovaCompra({
   async function salvar() {
     if (!dataCompra) { toast.error("Informe a data da compra."); return }
     if (!fornecedorId && !localCompra.trim()) {
-      toast.error("Informe o fornecedor ou o local da compra.")
+      toast.error("Informe o mercado onde a compra foi realizada ou selecione um fornecedor.")
       return
     }
 
@@ -259,7 +248,6 @@ function NovaCompra({
       setItens([novoItem()])
       onSalvo()
     } catch (err) {
-      // Em caso de resposta perdida, verifica a chave antes de remover a nota.
       const { data: compraExistente } = await supabase
         .from("mercado_compras")
         .select("id")
@@ -291,10 +279,9 @@ function NovaCompra({
 
   return (
     <div className="grid gap-6">
-      {/* Cabeçalho */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
-          <Label htmlFor="local-compra">Local da compra / Mercado</Label>
+          <Label htmlFor="local-compra">Mercado / Local da compra</Label>
           <Input
             id="local-compra"
             placeholder="Ex.: Assaí, Atacadão, Spani"
@@ -305,38 +292,47 @@ function NovaCompra({
         </div>
         <div className="grid gap-2">
           <Label htmlFor="fornecedor">Fornecedor (opcional)</Label>
-          <Select value={fornecedorId} onValueChange={(v) => setFornecedorId(v ?? "")}>
-            <SelectTrigger id="fornecedor">
-              <SelectValue placeholder="Selecione um fornecedor" />
-            </SelectTrigger>
-            <SelectContent>
-              {fornecedores
-                .filter((f) => f.ativo)
-                .map((f) => (
-                  <SelectItem key={f.id} value={f.id}>
-                    {f.nome}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select value={fornecedorId} onValueChange={(v) => setFornecedorId(v ?? "")}>
+              <SelectTrigger id="fornecedor" className="flex-1">
+                <SelectValue placeholder="Selecione um fornecedor" />
+              </SelectTrigger>
+              <SelectContent>
+                {fornecedores
+                  .filter((f) => f.ativo)
+                  .map((f) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.nome}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {fornecedorId && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setFornecedorId("")}
+                aria-label="Limpar fornecedor selecionado"
+                title="Limpar fornecedor"
+              >
+                <X className="size-4" />
+              </Button>
+            )}
+          </div>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="data-compra">
             Data da compra <span className="text-destructive">*</span>
           </Label>
           <div className="relative">
-            <Input
-              id="data-compra"
-              type="date"
-              value={dataCompra}
-              onChange={(e) => setDataCompra(e.target.value)}
-            />
+            <Input id="data-compra" type="date" value={dataCompra} onChange={(e) => setDataCompra(e.target.value)} />
             <CalendarIcon className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           </div>
         </div>
         <div className="grid gap-2">
           <p className="text-xs text-muted-foreground self-end pb-2">
-            Informe pelo menos o local da compra ou um fornecedor cadastrado.
+            Informe o mercado onde a compra foi realizada ou selecione um fornecedor cadastrado.
           </p>
         </div>
         <div className="sm:col-span-2 grid gap-2">
@@ -351,7 +347,6 @@ function NovaCompra({
         </div>
       </div>
 
-      {/* Itens */}
       <div className="grid gap-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold">Itens comprados</h3>
@@ -380,21 +375,14 @@ function NovaCompra({
                 return (
                   <TableRow key={item.id}>
                     <TableCell>
-                      <Select
-                        value={item.insumo_id}
-                        onValueChange={(v) => updateItem(item.id, "insumo_id", v ?? "")}
-                      >
+                      <Select value={item.insumo_id} onValueChange={(v) => updateItem(item.id, "insumo_id", v ?? "")}>
                         <SelectTrigger className="h-8">
                           <SelectValue placeholder="Selecionar insumo" />
                         </SelectTrigger>
                         <SelectContent>
-                          {insumos
-                            .filter((i) => i.ativo)
-                            .map((i) => (
-                              <SelectItem key={i.id} value={i.id}>
-                                {i.nome}
-                              </SelectItem>
-                            ))}
+                          {insumos.filter((i) => i.ativo).map((i) => (
+                            <SelectItem key={i.id} value={i.id}>{i.nome}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </TableCell>
@@ -409,11 +397,7 @@ function NovaCompra({
                           value={item.quantidade_comprada}
                           onChange={(e) => updateItem(item.id, "quantidade_comprada", e.target.value)}
                         />
-                        {insumoSel && (
-                          <span className="text-xs text-muted-foreground shrink-0">
-                            {insumoSel.unidade}
-                          </span>
-                        )}
+                        {insumoSel && <span className="text-xs text-muted-foreground shrink-0">{insumoSel.unidade}</span>}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -427,9 +411,7 @@ function NovaCompra({
                         onChange={(e) => updateItem(item.id, "preco_unitario", e.target.value)}
                       />
                     </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {moeda(q * p)}
-                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">{moeda(q * p)}</TableCell>
                     <TableCell>
                       <Button
                         type="button"
@@ -447,12 +429,8 @@ function NovaCompra({
                 )
               })}
               <TableRow>
-                <TableCell colSpan={3} className="text-right font-semibold text-sm">
-                  Total da compra
-                </TableCell>
-                <TableCell className="text-right font-bold tabular-nums text-primary">
-                  {moeda(calcTotal())}
-                </TableCell>
+                <TableCell colSpan={3} className="text-right font-semibold text-sm">Total da compra</TableCell>
+                <TableCell className="text-right font-bold tabular-nums text-primary">{moeda(calcTotal())}</TableCell>
                 <TableCell />
               </TableRow>
             </TableBody>
@@ -460,7 +438,6 @@ function NovaCompra({
         </div>
       </div>
 
-      {/* Nota fiscal */}
       <AnexoField notaPath={notaPath} onChange={setNotaPath} />
 
       <div className="flex justify-end">
@@ -473,7 +450,6 @@ function NovaCompra({
   )
 }
 
-// ─── Linha expandível do histórico ───────────────────────────────────────────
 function LinhaHistorico({ compra, insumos }: { compra: MercadoCompra; insumos: Insumo[] }) {
   const supabase = createClient()
   const [expandido, setExpandido] = useState(false)
@@ -481,9 +457,7 @@ function LinhaHistorico({ compra, insumos }: { compra: MercadoCompra; insumos: I
 
   async function verNota() {
     if (!compra.nota_path || notaUrl) return
-    const { data } = await supabase.storage
-      .from("erp-payment-attachments")
-      .createSignedUrl(compra.nota_path, 3600)
+    const { data } = await supabase.storage.from("erp-payment-attachments").createSignedUrl(compra.nota_path, 3600)
     if (data) setNotaUrl(data.signedUrl)
   }
 
@@ -491,10 +465,7 @@ function LinhaHistorico({ compra, insumos }: { compra: MercadoCompra; insumos: I
 
   return (
     <>
-      <TableRow
-        className="cursor-pointer select-none"
-        onClick={() => { setExpandido((v) => !v); verNota() }}
-      >
+      <TableRow className="cursor-pointer select-none" onClick={() => { setExpandido((v) => !v); verNota() }}>
         <TableCell className="font-medium">{dataFormatada}</TableCell>
         <TableCell>
           {compra.local_compra || compra.fornecedor?.nome || <span className="text-muted-foreground">—</span>}
@@ -505,10 +476,7 @@ function LinhaHistorico({ compra, insumos }: { compra: MercadoCompra; insumos: I
         <TableCell className="text-right font-semibold tabular-nums">{moeda(compra.valor_total)}</TableCell>
         <TableCell className="text-center">
           {compra.nota_path ? (
-            <Badge variant="outline" className="text-xs">
-              <FileText className="size-3 mr-1" />
-              Nota
-            </Badge>
+            <Badge variant="outline" className="text-xs"><FileText className="size-3 mr-1" />Nota</Badge>
           ) : (
             <span className="text-muted-foreground text-xs">—</span>
           )}
@@ -522,9 +490,7 @@ function LinhaHistorico({ compra, insumos }: { compra: MercadoCompra; insumos: I
           <TableCell colSpan={6} className="bg-muted/20 py-4 px-6">
             <div className="grid gap-3">
               {compra.observacoes && (
-                <p className="text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">Obs:</span> {compra.observacoes}
-                </p>
+                <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Obs:</span> {compra.observacoes}</p>
               )}
               <Table>
                 <TableHeader>
@@ -541,29 +507,17 @@ function LinhaHistorico({ compra, insumos }: { compra: MercadoCompra; insumos: I
                     return (
                       <TableRow key={item.id}>
                         <TableCell>{ins?.nome ?? item.insumo_id}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {item.quantidade_comprada} {item.unidade || ins?.unidade || ""}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {moeda(item.preco_unitario)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums font-medium">
-                          {moeda(item.preco_total)}
-                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{item.quantidade_comprada} {item.unidade || ins?.unidade || ""}</TableCell>
+                        <TableCell className="text-right tabular-nums">{moeda(item.preco_unitario)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{moeda(item.preco_total)}</TableCell>
                       </TableRow>
                     )
                   })}
                 </TableBody>
               </Table>
               {notaUrl && (
-                <a
-                  href={notaUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm text-primary underline underline-offset-2"
-                >
-                  <FileText className="size-4" />
-                  Ver nota fiscal
+                <a href={notaUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary underline underline-offset-2">
+                  <FileText className="size-4" />Ver nota fiscal
                 </a>
               )}
             </div>
@@ -574,7 +528,6 @@ function LinhaHistorico({ compra, insumos }: { compra: MercadoCompra; insumos: I
   )
 }
 
-// ─── Aba: Histórico ───────────────────────────────────────────────────────────
 function Historico({ compras, insumos }: { compras: MercadoCompra[]; insumos: Insumo[] }) {
   const agora = new Date()
   const [mesSel, setMesSel] = useState(agora.getMonth())
@@ -588,11 +541,10 @@ function Historico({ compras, insumos }: { compras: MercadoCompra[]; insumos: In
   }, [compras])
 
   const filtradas = useMemo(
-    () =>
-      compras.filter((c) => {
-        const d = new Date(c.data_compra + "T12:00:00")
-        return d.getMonth() === mesSel && d.getFullYear() === anoSel
-      }),
+    () => compras.filter((c) => {
+      const d = new Date(c.data_compra + "T12:00:00")
+      return d.getMonth() === mesSel && d.getFullYear() === anoSel
+    }),
     [compras, mesSel, anoSel],
   )
 
@@ -600,32 +552,14 @@ function Historico({ compras, insumos }: { compras: MercadoCompra[]; insumos: In
     <div className="grid gap-4">
       <div className="flex flex-wrap gap-3 items-center">
         <Select value={String(mesSel)} onValueChange={(v) => setMesSel(Number(v))}>
-          <SelectTrigger className="w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {MESES.map((m, i) => (
-              <SelectItem key={i} value={String(i)}>
-                {m}
-              </SelectItem>
-            ))}
-          </SelectContent>
+          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+          <SelectContent>{MESES.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}</SelectContent>
         </Select>
         <Select value={String(anoSel)} onValueChange={(v) => setAnoSel(Number(v))}>
-          <SelectTrigger className="w-28">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {anos.map((a) => (
-              <SelectItem key={a} value={String(a)}>
-                {a}
-              </SelectItem>
-            ))}
-          </SelectContent>
+          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+          <SelectContent>{anos.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}</SelectContent>
         </Select>
-        <span className="text-sm text-muted-foreground">
-          {filtradas.length} compra{filtradas.length !== 1 ? "s" : ""}
-        </span>
+        <span className="text-sm text-muted-foreground">{filtradas.length} compra{filtradas.length !== 1 ? "s" : ""}</span>
       </div>
 
       {filtradas.length === 0 ? (
@@ -645,11 +579,7 @@ function Historico({ compras, insumos }: { compras: MercadoCompra[]; insumos: In
                 <TableHead className="w-8" />
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {filtradas.map((c) => (
-                <LinhaHistorico key={c.id} compra={c} insumos={insumos} />
-              ))}
-            </TableBody>
+            <TableBody>{filtradas.map((c) => <LinhaHistorico key={c.id} compra={c} insumos={insumos} />)}</TableBody>
           </Table>
         </div>
       )}
@@ -657,7 +587,6 @@ function Historico({ compras, insumos }: { compras: MercadoCompra[]; insumos: In
   )
 }
 
-// ─── Aba: Resumo Mensal ───────────────────────────────────────────────────────
 function ResumoMensal({ compras, insumos }: { compras: MercadoCompra[]; insumos: Insumo[] }) {
   const agora = new Date()
   const [mesSel, setMesSel] = useState(agora.getMonth())
@@ -671,18 +600,16 @@ function ResumoMensal({ compras, insumos }: { compras: MercadoCompra[]; insumos:
   }, [compras])
 
   const filtradas = useMemo(
-    () =>
-      compras.filter((c) => {
-        const d = new Date(c.data_compra + "T12:00:00")
-        return d.getMonth() === mesSel && d.getFullYear() === anoSel
-      }),
+    () => compras.filter((c) => {
+      const d = new Date(c.data_compra + "T12:00:00")
+      return d.getMonth() === mesSel && d.getFullYear() === anoSel
+    }),
     [compras, mesSel, anoSel],
   )
 
   const totalGasto = filtradas.reduce((acc, c) => acc + c.valor_total, 0)
   const mediaPorCompra = filtradas.length > 0 ? totalGasto / filtradas.length : 0
 
-  // Agrega itens por insumo — todos os meses para calcular preço anterior
   type AggItem = {
     insumo_id: string
     nome: string
@@ -695,7 +622,6 @@ function ResumoMensal({ compras, insumos }: { compras: MercadoCompra[]; insumos:
   }
 
   const porInsumo = useMemo<AggItem[]>(() => {
-    // histórico de preços por insumo (todas as compras, ordenado por data)
     const histPreco: Record<string, { preco: number; data: string }[]> = {}
     compras.forEach((c) => {
       ;(c.itens ?? []).forEach((item) => {
@@ -714,78 +640,44 @@ function ResumoMensal({ compras, insumos }: { compras: MercadoCompra[]; insumos:
       })
     })
 
-    return Object.entries(mapa)
-      .map(([insumo_id, { qtd, valor }]) => {
-        const ins = insumos.find((i) => i.id === insumo_id)
-        const hist = histPreco[insumo_id] ?? []
-        const ultIdx = hist.length - 1
-        const ultimo_preco = hist[ultIdx]?.preco ?? 0
-        const preco_anterior = ultIdx > 0 ? hist[ultIdx - 1].preco : null
-        return {
-          insumo_id,
-          nome: ins?.nome ?? insumo_id,
-          unidade: ins?.unidade ?? "",
-          qtd_total: qtd,
-          valor_total: valor,
-          ultimo_preco,
-          preco_anterior,
-          ultima_data: hist[ultIdx]?.data ?? "",
-        }
-      })
-      .sort((a, b) => b.valor_total - a.valor_total)
+    return Object.entries(mapa).map(([insumo_id, { qtd, valor }]) => {
+      const ins = insumos.find((i) => i.id === insumo_id)
+      const hist = histPreco[insumo_id] ?? []
+      const ultIdx = hist.length - 1
+      return {
+        insumo_id,
+        nome: ins?.nome ?? insumo_id,
+        unidade: ins?.unidade ?? "",
+        qtd_total: qtd,
+        valor_total: valor,
+        ultimo_preco: hist[ultIdx]?.preco ?? 0,
+        preco_anterior: ultIdx > 0 ? hist[ultIdx - 1].preco : null,
+        ultima_data: hist[ultIdx]?.data ?? "",
+      }
+    }).sort((a, b) => b.valor_total - a.valor_total)
   }, [filtradas, compras, insumos])
 
   return (
     <div className="grid gap-6">
-      {/* Filtro */}
       <div className="flex flex-wrap gap-3 items-center">
         <Select value={String(mesSel)} onValueChange={(v) => setMesSel(Number(v))}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {MESES.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}
-          </SelectContent>
+          <SelectContent>{MESES.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}</SelectContent>
         </Select>
         <Select value={String(anoSel)} onValueChange={(v) => setAnoSel(Number(v))}>
           <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {anos.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
-          </SelectContent>
+          <SelectContent>{anos.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}</SelectContent>
         </Select>
       </div>
 
-      {/* Cards */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total gasto</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold tabular-nums">{moeda(totalGasto)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Qtd. de compras</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold tabular-nums">{filtradas.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Média por compra</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold tabular-nums">{moeda(mediaPorCompra)}</p>
-          </CardContent>
-        </Card>
+        <Card><CardHeader className="pb-1"><CardTitle className="text-sm font-medium text-muted-foreground">Total gasto</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold tabular-nums">{moeda(totalGasto)}</p></CardContent></Card>
+        <Card><CardHeader className="pb-1"><CardTitle className="text-sm font-medium text-muted-foreground">Qtd. de compras</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold tabular-nums">{filtradas.length}</p></CardContent></Card>
+        <Card><CardHeader className="pb-1"><CardTitle className="text-sm font-medium text-muted-foreground">Média por compra</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold tabular-nums">{moeda(mediaPorCompra)}</p></CardContent></Card>
       </div>
 
-      {/* Tabela por insumo */}
       {porInsumo.length === 0 ? (
-        <div className="grid h-32 place-items-center rounded-xl border border-dashed border-border text-muted-foreground text-sm">
-          Nenhuma compra neste período.
-        </div>
+        <div className="grid h-32 place-items-center rounded-xl border border-dashed border-border text-muted-foreground text-sm">Nenhuma compra neste período.</div>
       ) : (
         <div className="rounded-xl border border-border overflow-hidden">
           <Table>
@@ -801,39 +693,23 @@ function ResumoMensal({ compras, insumos }: { compras: MercadoCompra[]; insumos:
             </TableHeader>
             <TableBody>
               {porInsumo.map((row) => {
-                const variacao =
-                  row.preco_anterior && row.preco_anterior > 0
-                    ? ((row.ultimo_preco - row.preco_anterior) / row.preco_anterior) * 100
-                    : null
+                const variacao = row.preco_anterior && row.preco_anterior > 0
+                  ? ((row.ultimo_preco - row.preco_anterior) / row.preco_anterior) * 100
+                  : null
                 return (
                   <TableRow key={row.insumo_id}>
                     <TableCell className="font-medium">{row.nome}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {row.qtd_total.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {row.unidade}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums font-semibold">
-                      {moeda(row.valor_total)}
-                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{row.qtd_total.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {row.unidade}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{moeda(row.valor_total)}</TableCell>
                     <TableCell className="text-right tabular-nums">{moeda(row.ultimo_preco)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {row.preco_anterior != null ? moeda(row.preco_anterior) : "—"}
-                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">{row.preco_anterior != null ? moeda(row.preco_anterior) : "—"}</TableCell>
                     <TableCell className="text-right">
                       {variacao == null ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
-                        <span
-                          className={`inline-flex items-center gap-1 text-sm font-semibold ${
-                            variacao > 0 ? "text-destructive" : variacao < 0 ? "text-emerald-500" : "text-muted-foreground"
-                          }`}
-                        >
-                          {variacao > 0 ? (
-                            <TrendingUp className="size-3.5" />
-                          ) : variacao < 0 ? (
-                            <TrendingDown className="size-3.5" />
-                          ) : null}
-                          {variacao > 0 ? "+" : ""}
-                          {variacao.toFixed(1)}%
+                        <span className={`inline-flex items-center gap-1 text-sm font-semibold ${variacao > 0 ? "text-destructive" : variacao < 0 ? "text-emerald-500" : "text-muted-foreground"}`}>
+                          {variacao > 0 ? <TrendingUp className="size-3.5" /> : variacao < 0 ? <TrendingDown className="size-3.5" /> : null}
+                          {variacao > 0 ? "+" : ""}{variacao.toFixed(1)}%
                         </span>
                       )}
                     </TableCell>
@@ -848,7 +724,6 @@ function ResumoMensal({ compras, insumos }: { compras: MercadoCompra[]; insumos:
   )
 }
 
-// ─── Componente principal ─────────────────────────────────────────────────────
 export function MercadoView() {
   const supabase = createClient()
 
@@ -859,20 +734,12 @@ export function MercadoView() {
   })
 
   const { data: insumos } = useSWR<Insumo[]>("producao_insumos:mercado", async () => {
-    const { data, error } = await supabase
-      .from("producao_insumos")
-      .select("id, nome, unidade, ativo")
-      .eq("ativo", true)
-      .order("nome")
+    const { data, error } = await supabase.from("producao_insumos").select("id, nome, unidade, ativo").eq("ativo", true).order("nome")
     if (error) throw error
     return (data ?? []) as Insumo[]
   })
 
-  const {
-    data: compras,
-    mutate: mutateCompras,
-    isLoading,
-  } = useSWR<MercadoCompra[]>("mercado_compras", async () => {
+  const { data: compras, mutate: mutateCompras, isLoading } = useSWR<MercadoCompra[]>("mercado_compras", async () => {
     const { data, error } = await supabase
       .from("mercado_compras")
       .select(`
@@ -894,9 +761,7 @@ export function MercadoView() {
     <div className="grid gap-6">
       <div>
         <h1 className="font-heading text-2xl font-bold tracking-tight">Mercado</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Registre compras realizadas, acompanhe o histórico e analise os preços por insumo.
-        </p>
+        <p className="text-sm text-muted-foreground mt-1">Registre compras realizadas, acompanhe o histórico e analise os preços por insumo.</p>
       </div>
 
       <Tabs defaultValue="nova-compra">
@@ -910,23 +775,15 @@ export function MercadoView() {
 
         <TabsContent value="nova-compra">
           {isLoading ? (
-            <div className="grid h-40 place-items-center">
-              <Loader2 className="size-6 animate-spin text-muted-foreground" />
-            </div>
+            <div className="grid h-40 place-items-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           ) : (
-            <NovaCompra
-              fornecedores={fornecedores ?? []}
-              insumos={insumos ?? []}
-              onSalvo={onSalvo}
-            />
+            <NovaCompra fornecedores={fornecedores ?? []} insumos={insumos ?? []} onSalvo={onSalvo} />
           )}
         </TabsContent>
 
         <TabsContent value="historico">
           {isLoading ? (
-            <div className="grid h-40 place-items-center">
-              <Loader2 className="size-6 animate-spin text-muted-foreground" />
-            </div>
+            <div className="grid h-40 place-items-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           ) : (
             <Historico compras={compras ?? []} insumos={insumos ?? []} />
           )}
@@ -934,9 +791,7 @@ export function MercadoView() {
 
         <TabsContent value="resumo">
           {isLoading ? (
-            <div className="grid h-40 place-items-center">
-              <Loader2 className="size-6 animate-spin text-muted-foreground" />
-            </div>
+            <div className="grid h-40 place-items-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           ) : (
             <ResumoMensal compras={compras ?? []} insumos={insumos ?? []} />
           )}
