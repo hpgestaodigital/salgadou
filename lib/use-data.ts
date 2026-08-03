@@ -3,13 +3,20 @@
 import useSWR from "swr"
 import { createClient } from "@/lib/supabase/client"
 
+const PROTECTED_TABLE_RPCS: Record<string, string> = {
+  colaboradores: "listar_colaboradores",
+  motoboys: "listar_motoboys",
+  fornecedores: "listar_fornecedores",
+}
+
 export function useTable<T>(table: string, orderBy?: { column: string; ascending?: boolean }) {
   const supabase = createClient()
   const key = `table:${table}:${orderBy?.column ?? ""}:${orderBy?.ascending ?? ""}`
 
   const { data, error, isLoading, mutate } = useSWR<T[]>(key, async () => {
-    if (table === "colaboradores") {
-      const { data, error } = await supabase.rpc("listar_colaboradores")
+    const protectedRpc = PROTECTED_TABLE_RPCS[table]
+    if (protectedRpc) {
+      const { data, error } = await supabase.rpc(protectedRpc)
       if (error) throw error
       const rows = [...((data ?? []) as T[])]
       if (orderBy) {
