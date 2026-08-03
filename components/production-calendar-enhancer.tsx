@@ -52,7 +52,6 @@ export function ProductionCalendarEnhancer() {
 
       numericos.forEach((input) => {
         input.value = ""
-        input.closest<HTMLElement>("div")?.classList.add("hidden")
         input.classList.add("hidden")
         input.setAttribute("aria-hidden", "true")
         input.tabIndex = -1
