@@ -17,7 +17,7 @@ export function ConfirmDeleteButton({
   label = "Excluir registro",
   description = "Esta ação não pode ser desfeita.",
 }: {
-  onConfirm: () => Promise<void>
+  onConfirm: () => Promise<unknown>
   label?: string
   description?: string
 }) {
