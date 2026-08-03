@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Loader2, LogIn, UtensilsCrossed } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
@@ -11,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 export default function LoginPage() {
-  const router = useRouter()
   const supabase = createClient()
 
   const [email, setEmail] = useState("")
@@ -39,8 +37,10 @@ export default function LoginPage() {
         }
         return
       }
-      router.replace("/")
-      router.refresh()
+
+      // Uma recarga completa impede que dados em cache da conta anterior sejam reutilizados
+      // quando o mesmo computador é compartilhado por pessoas diferentes.
+      window.location.replace("/")
     } catch {
       setErro("Erro inesperado ao entrar.")
     } finally {
