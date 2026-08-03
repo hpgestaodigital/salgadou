@@ -2,7 +2,14 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { enviarEvolution, evolutionConfigurada } from "@/lib/evolution/server"
 
-const MODULOS_ENVIO = [
+const MODULOS_VALIDACAO = [
+  "configuracoes",
+  "escala",
+  "pagamentos_fornecedores",
+  "pagamentos_motoboys",
+] as const
+
+const MODULOS_ENVIO_DIRETO = [
   "configuracoes",
   "pagamentos_fornecedores",
   "pagamentos_motoboys",
@@ -30,12 +37,12 @@ export async function POST(request: Request) {
         .from("perfis_permissoes")
         .select("modulo,pode_visualizar")
         .eq("papel", papel)
-        .in("modulo", [...MODULOS_ENVIO]),
+        .in("modulo", [...MODULOS_VALIDACAO]),
       supabase
         .from("usuarios_permissoes")
         .select("modulo,pode_visualizar")
         .eq("usuario_id", auth.user.id)
-        .in("modulo", [...MODULOS_ENVIO]),
+        .in("modulo", [...MODULOS_VALIDACAO]),
     ])
 
     if (padraoError || individualError) {
@@ -46,8 +53,9 @@ export async function POST(request: Request) {
     for (const item of padrao ?? []) permissoes.set(item.modulo, item.pode_visualizar)
     for (const item of individual ?? []) permissoes.set(item.modulo, item.pode_visualizar)
 
-    const gestorEscala = ["admin", "financeiro", "socio"].includes(papel)
-    const moduloAutorizado = [...MODULOS_ENVIO].some((modulo) => permissoes.get(modulo) === true)
+    const gestorEscala =
+      ["admin", "financeiro", "socio"].includes(papel) && permissoes.get("escala") === true
+    const moduloAutorizado = [...MODULOS_ENVIO_DIRETO].some((modulo) => permissoes.get(modulo) === true)
     if (!gestorEscala && !moduloAutorizado) {
       return NextResponse.json({ error: "Você não tem permissão para enviar mensagens." }, { status: 403 })
     }
