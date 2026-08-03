@@ -49,6 +49,14 @@ function moeda(val: number) {
   return val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
+function hojeISO() {
+  const agora = new Date()
+  const ano = agora.getFullYear()
+  const mes = String(agora.getMonth() + 1).padStart(2, "0")
+  const dia = String(agora.getDate()).padStart(2, "0")
+  return `${ano}-${mes}-${dia}`
+}
+
 function novoItem(): ItemForm {
   return { id: crypto.randomUUID(), insumo_id: "", quantidade_comprada: "", preco_unitario: "" }
 }
@@ -193,9 +201,11 @@ function NovaCompra({
   const supabase = createClient()
   const [salvando, setSalvando] = useState(false)
   const [fornecedorId, setFornecedorId] = useState("")
-  const [dataCompra, setDataCompra] = useState(() => new Date().toISOString().slice(0, 10))
+  const [localCompra, setLocalCompra] = useState("")
+  const [dataCompra, setDataCompra] = useState(hojeISO)
   const [observacoes, setObservacoes] = useState("")
   const [notaPath, setNotaPath] = useState("")
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
   const [itens, setItens] = useState<ItemForm[]>([novoItem()])
 
   function addItem() { setItens((prev) => [...prev, novoItem()]) }
@@ -214,6 +224,11 @@ function NovaCompra({
 
   async function salvar() {
     if (!dataCompra) { toast.error("Informe a data da compra."); return }
+    if (!fornecedorId && !localCompra.trim()) {
+      toast.error("Informe o fornecedor ou o local da compra.")
+      return
+    }
+
     const itensValidos = itens.filter((i) => i.insumo_id && i.quantidade_comprada && i.preco_unitario)
     if (itensValidos.length === 0) { toast.error("Adicione ao menos um item completo."); return }
 
@@ -229,19 +244,46 @@ function NovaCompra({
         })),
         p_observacoes: observacoes || null,
         p_nota_path: notaPath || null,
+        p_local_compra: localCompra.trim() || null,
+        p_idempotency_key: idempotencyKey,
       })
       if (error) throw error
+
       toast.success("Compra registrada com sucesso.")
-      // Reset
       setFornecedorId("")
-      setDataCompra(new Date().toISOString().slice(0, 10))
+      setLocalCompra("")
+      setDataCompra(hojeISO())
       setObservacoes("")
       setNotaPath("")
+      setIdempotencyKey(crypto.randomUUID())
       setItens([novoItem()])
       onSalvo()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro desconhecido"
-      toast.error(`Não foi possível registrar a compra: ${msg}`)
+      // Em caso de resposta perdida, verifica a chave antes de remover a nota.
+      const { data: compraExistente } = await supabase
+        .from("mercado_compras")
+        .select("id")
+        .eq("idempotency_key", idempotencyKey)
+        .maybeSingle()
+
+      if (compraExistente) {
+        toast.success("Compra registrada com sucesso.")
+        setFornecedorId("")
+        setLocalCompra("")
+        setDataCompra(hojeISO())
+        setObservacoes("")
+        setNotaPath("")
+        setIdempotencyKey(crypto.randomUUID())
+        setItens([novoItem()])
+        onSalvo()
+      } else {
+        if (notaPath) {
+          await supabase.storage.from("erp-payment-attachments").remove([notaPath])
+          setNotaPath("")
+        }
+        const msg = err instanceof Error ? err.message : "Erro desconhecido"
+        toast.error(`Não foi possível registrar a compra: ${msg}`)
+      }
     } finally {
       setSalvando(false)
     }
@@ -251,6 +293,16 @@ function NovaCompra({
     <div className="grid gap-6">
       {/* Cabeçalho */}
       <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="local-compra">Local da compra / Mercado</Label>
+          <Input
+            id="local-compra"
+            placeholder="Ex.: Assaí, Atacadão, Spani"
+            value={localCompra}
+            onChange={(e) => setLocalCompra(e.target.value)}
+            maxLength={120}
+          />
+        </div>
         <div className="grid gap-2">
           <Label htmlFor="fornecedor">Fornecedor (opcional)</Label>
           <Select value={fornecedorId} onValueChange={(v) => setFornecedorId(v ?? "")}>
@@ -281,6 +333,11 @@ function NovaCompra({
             />
             <CalendarIcon className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           </div>
+        </div>
+        <div className="grid gap-2">
+          <p className="text-xs text-muted-foreground self-end pb-2">
+            Informe pelo menos o local da compra ou um fornecedor cadastrado.
+          </p>
         </div>
         <div className="sm:col-span-2 grid gap-2">
           <Label htmlFor="obs">Observações (opcional)</Label>
@@ -439,7 +496,9 @@ function LinhaHistorico({ compra, insumos }: { compra: MercadoCompra; insumos: I
         onClick={() => { setExpandido((v) => !v); verNota() }}
       >
         <TableCell className="font-medium">{dataFormatada}</TableCell>
-        <TableCell>{compra.fornecedor?.nome ?? <span className="text-muted-foreground">—</span>}</TableCell>
+        <TableCell>
+          {compra.local_compra || compra.fornecedor?.nome || <span className="text-muted-foreground">—</span>}
+        </TableCell>
         <TableCell className="text-center">
           <Badge variant="secondary">{compra.itens?.length ?? 0} iten{(compra.itens?.length ?? 0) !== 1 ? "s" : ""}</Badge>
         </TableCell>
@@ -483,7 +542,7 @@ function LinhaHistorico({ compra, insumos }: { compra: MercadoCompra; insumos: I
                       <TableRow key={item.id}>
                         <TableCell>{ins?.nome ?? item.insumo_id}</TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {item.quantidade_comprada} {ins?.unidade ?? ""}
+                          {item.quantidade_comprada} {item.unidade || ins?.unidade || ""}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {moeda(item.preco_unitario)}
@@ -579,7 +638,7 @@ function Historico({ compras, insumos }: { compras: MercadoCompra[]; insumos: In
             <TableHeader>
               <TableRow>
                 <TableHead>Data</TableHead>
-                <TableHead>Fornecedor</TableHead>
+                <TableHead>Local / Fornecedor</TableHead>
                 <TableHead className="text-center">Itens</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-center">Nota</TableHead>
@@ -821,7 +880,7 @@ export function MercadoView() {
         fornecedor:fornecedor_id ( nome ),
         itens:mercado_compra_itens (
           id, compra_id, insumo_id,
-          quantidade_comprada, preco_unitario, preco_total
+          quantidade_comprada, unidade, preco_unitario, preco_total
         )
       `)
       .order("data_compra", { ascending: false })
