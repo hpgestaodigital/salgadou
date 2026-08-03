@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { CalendarDays, ChevronLeft, ChevronRight, Eye } from "lucide-react"
 import { useTable } from "@/lib/use-data"
 import { todayISO } from "@/lib/format"
@@ -31,15 +31,27 @@ function chaveLocal(data: Date) {
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`
 }
 
+function formatarData(dataISO: string): string {
+  const [ano, mes, dia] = dataISO.split("-").map(Number)
+  const data = new Date(ano, mes - 1, dia, 12, 0, 0)
+  return data.toLocaleDateString("pt-BR", { dateStyle: "long" })
+}
+
 export function DashboardProductionCalendar() {
   const hoje = todayISO()
-  const dataHoje = new Date(`${hoje}T12:00:00`)
-  const [mes, setMes] = useState(() => new Date(dataHoje.getFullYear(), dataHoje.getMonth(), 1))
+  const [mes, setMes] = useState<Date | null>(null)
   const [diaSelecionado, setDiaSelecionado] = useState(hoje)
   const { data: planos } = useTable<PlanoProducao>("producao_planejamento", { column: "data_producao" })
   const { data: produtos } = useTable<ProdutoProducao>("producao_produtos", { column: "nome" })
 
+  // Initialize month on client side to avoid hydration mismatch
+  useEffect(() => {
+    const dataHoje = new Date(`${hoje}T12:00:00`)
+    setMes(new Date(dataHoje.getFullYear(), dataHoje.getMonth(), 1))
+  }, [hoje])
+
   const dias = useMemo(() => {
+    if (!mes) return []
     const inicio = new Date(mes.getFullYear(), mes.getMonth(), 1)
     inicio.setDate(inicio.getDate() - inicio.getDay())
     return Array.from({ length: 42 }, (_, indice) => {
@@ -91,7 +103,7 @@ export function DashboardProductionCalendar() {
           </button>
         })}</div>
       </div></div>
-      <aside className="rounded-lg border border-border/70 bg-background/35 p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{new Date(`${diaSelecionado}T12:00:00`).toLocaleDateString("pt-BR", { dateStyle: "long" })}</p>
+      <aside className="rounded-lg border border-border/70 bg-background/35 p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{formatarData(diaSelecionado)}</p>
         <div className="mt-2 grid max-h-32 gap-2 overflow-auto sm:grid-cols-2">{selecionados.length ? selecionados.map((plano) => {
           const produto = produtosPorId.get(plano.produto_id)
           return <div key={plano.id} className="rounded-lg border border-border/70 p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-sm font-semibold">{produto?.nome || "Produção"}</p><Badge variant="secondary" className="text-[9px]">{STATUS[plano.status]}</Badge></div><p className="mt-0.5 text-xs text-muted-foreground">{Number(plano.quantidade).toLocaleString("pt-BR")} {produto?.unidade || "un"}</p></div>
