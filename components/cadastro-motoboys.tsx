@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { mensagemErroSupabase } from "@/lib/supabase/friendly-error"
 import { useTable } from "@/lib/use-data"
-import type { Motoboy } from "@/lib/types"
+import { TIPOS_CHAVE_PIX, type Motoboy, type PixTipo } from "@/lib/types"
 import { formatBRL } from "@/lib/format"
 import { ConfirmDeleteButton } from "@/components/confirm-button"
 import { Card } from "@/components/ui/card"
@@ -15,10 +15,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-const vazio = { nome: "", pix: "", whatsapp: "", valor_diaria: "", ativo: true }
+const vazio = { nome: "", pix: "", pix_tipo: "" as PixTipo | "", whatsapp: "", valor_diaria: "", ativo: true }
+
+function labelPix(tipo?: PixTipo | null) {
+  return TIPOS_CHAVE_PIX.find((item) => item.value === tipo)?.label ?? "Tipo não informado"
+}
 
 export function CadastroMotoboys() {
   const supabase = createClient()
@@ -40,6 +45,7 @@ export function CadastroMotoboys() {
     setForm({
       nome: m.nome,
       pix: m.pix ?? "",
+      pix_tipo: m.pix_tipo ?? "",
       whatsapp: m.whatsapp ?? "",
       valor_diaria: String(m.valor_diaria ?? ""),
       ativo: m.ativo,
@@ -52,11 +58,16 @@ export function CadastroMotoboys() {
       toast.error("Informe o nome.")
       return
     }
+    if (form.pix && !form.pix_tipo) {
+      toast.error("Selecione o tipo da chave PIX.")
+      return
+    }
     setSaving(true)
     try {
       const payload = {
         nome: form.nome.trim(),
         pix: form.pix || null,
+        pix_tipo: form.pix ? form.pix_tipo || null : null,
         whatsapp: form.whatsapp || null,
         valor_diaria: Number(form.valor_diaria) || 0,
         ativo: form.ativo,
@@ -111,35 +122,28 @@ export function CadastroMotoboys() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                    Carregando...
-                  </TableCell>
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Carregando...</TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                    Nenhum motoboy cadastrado.
-                  </TableCell>
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Nenhum motoboy cadastrado.</TableCell>
                 </TableRow>
               ) : (
                 data.map((m) => (
                   <TableRow key={m.id}>
                     <TableCell className="font-semibold">{m.nome}</TableCell>
-                    <TableCell className="text-muted-foreground">{m.pix || "—"}</TableCell>
+                    <TableCell>
+                      <span className="block text-muted-foreground">{m.pix || "—"}</span>
+                      {m.pix && <span className="block text-xs text-muted-foreground">{labelPix(m.pix_tipo)}</span>}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{m.whatsapp || "—"}</TableCell>
                     <TableCell className="text-right">{formatBRL(m.valor_diaria)}</TableCell>
                     <TableCell>
-                      {m.ativo ? (
-                        <Badge className="bg-accent text-accent-foreground">Ativo</Badge>
-                      ) : (
-                        <Badge variant="secondary">Inativo</Badge>
-                      )}
+                      {m.ativo ? <Badge className="bg-accent text-accent-foreground">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge>}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => abrirEdicao(m)} aria-label="Editar">
-                          <Pencil className="size-4" />
-                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => abrirEdicao(m)} aria-label="Editar"><Pencil className="size-4" /></Button>
                         <ConfirmDeleteButton onConfirm={() => excluir(m.id)} />
                       </div>
                     </TableCell>
@@ -153,41 +157,33 @@ export function CadastroMotoboys() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editId ? "Editar motoboy" : "Novo motoboy"}</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>{editId ? "Editar motoboy" : "Novo motoboy"}</DialogTitle></DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5 sm:col-span-2">
               <Label htmlFor="nomeM">Nome</Label>
               <Input id="nomeM" value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
             </div>
-            <div className="grid gap-1.5 sm:col-span-2">
+            <div className="grid gap-1.5">
+              <Label>Tipo da chave PIX</Label>
+              <Select value={form.pix_tipo || "sem_tipo"} onValueChange={(value) => setForm({ ...form, pix_tipo: value === "sem_tipo" ? "" : value as PixTipo })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sem_tipo">Não informado</SelectItem>
+                  {TIPOS_CHAVE_PIX.map((tipo) => <SelectItem key={tipo.value} value={tipo.value}>{tipo.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
               <Label htmlFor="pix">Chave PIX</Label>
-              <Input
-                id="pix"
-                value={form.pix}
-                onChange={(e) => setForm({ ...form, pix: e.target.value })}
-                placeholder="CPF, telefone, e-mail ou chave aleatória"
-              />
+              <Input id="pix" value={form.pix} onChange={(e) => setForm({ ...form, pix: e.target.value })} placeholder="Digite a chave" />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="wppM">WhatsApp</Label>
-              <Input
-                id="wppM"
-                value={form.whatsapp}
-                onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-                placeholder="(00) 00000-0000"
-              />
+              <Input id="wppM" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="(00) 00000-0000" />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="diariaM">Valor da diária (R$)</Label>
-              <Input
-                id="diariaM"
-                type="number"
-                step="0.01"
-                value={form.valor_diaria}
-                onChange={(e) => setForm({ ...form, valor_diaria: e.target.value })}
-              />
+              <Input id="diariaM" type="number" step="0.01" value={form.valor_diaria} onChange={(e) => setForm({ ...form, valor_diaria: e.target.value })} />
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3 sm:col-span-2">
               <Label htmlFor="ativoM">Motoboy ativo</Label>
@@ -195,13 +191,8 @@ export function CadastroMotoboys() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={salvar} disabled={saving}>
-              {saving && <Loader2 className="size-4 animate-spin" />}
-              Salvar
-            </Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button onClick={salvar} disabled={saving}>{saving && <Loader2 className="size-4 animate-spin" />}Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
