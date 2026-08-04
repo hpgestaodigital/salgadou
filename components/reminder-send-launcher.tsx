@@ -1,8 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { BellRing, CalendarDays, CheckCircle2, Loader2, Send, UsersRound } from "lucide-react"
+import { useMemo, useState, type ReactNode } from "react"
+import { BellRing, CheckCircle2, Loader2, Send, UsersRound } from "lucide-react"
 import { toast } from "sonner"
+import { createClient } from "@/lib/supabase/client"
 import { useTable } from "@/lib/use-data"
 import type {
   Colaborador,
@@ -175,7 +176,8 @@ function ScaleReminderLauncher() {
 }
 
 function SupplierReminderLauncher() {
-  const { data: pagamentos } = useTable<PagamentoFornecedor>("pagamentos_fornecedores", { column: "vencimento" })
+  const supabase = createClient()
+  const { data: pagamentos, mutate } = useTable<PagamentoFornecedor>("pagamentos_fornecedores", { column: "vencimento" })
   const { data: fornecedores } = useTable<Fornecedor>("fornecedores", { column: "nome" })
   const { data: colaboradores } = useTable<Colaborador>("colaboradores", { column: "nome" })
   const { data: configuracoes } = useTable<Configuracao>("configuracoes")
@@ -189,7 +191,6 @@ function SupplierReminderLauncher() {
     [pagamentos],
   )
   const pagamento = ordenados.find((item) => item.id === pagamentoId) || null
-
   const recipients = useMemo(() => montarDestinosFornecedor(pagamento, fornecedores, colaboradores), [pagamento, fornecedores, colaboradores])
 
   function definirPadrao(id: string) {
@@ -197,6 +198,7 @@ function SupplierReminderLauncher() {
     const destinos = montarDestinosFornecedor(proximo, fornecedores, colaboradores)
     const mapa = configMap(configuracoes)
     const ids = new Set(lerIds(mapa[CHAVES.fornecedorIds]))
+    for (const responsavelId of proximo?.responsavel_ids ?? []) ids.add(responsavelId)
     if (proximo?.responsavel) {
       colaboradores.filter((pessoa) => normalizar(pessoa.nome) === normalizar(proximo.responsavel)).forEach((pessoa) => ids.add(pessoa.id))
     }
@@ -222,10 +224,18 @@ function SupplierReminderLauncher() {
     if (!pagamento) return toast.error("Selecione um pagamento.")
     const destinos = recipients.filter((pessoa) => selecionados.includes(pessoa.id))
     if (!destinos.length) return toast.error("Selecione ao menos um destinatário.")
+    const responsaveis = colaboradores.filter((pessoa) => selecionados.includes(pessoa.id))
     const mapa = configMap(configuracoes)
     const template = mapa[TEMPLATE_KEYS.fornecedor] || "Olá! Lembrete do pagamento do pedido {pedido} para {fornecedor} no valor de {valor}, com vencimento em {vencimento}."
     setEnviando(true)
     try {
+      const { error } = await supabase.from("pagamentos_fornecedores").update({
+        responsavel_ids: responsaveis.map((pessoa) => pessoa.id),
+        responsavel_nomes: responsaveis.map((pessoa) => pessoa.nome),
+        responsavel: responsaveis[0]?.nome ?? null,
+      }).eq("id", pagamento.id)
+      if (error) throw error
+
       const resultado = await enviarLote("pagamento_fornecedor", destinos.map((pessoa) => ({
         numero: pessoa.numero,
         mensagem: preencherTemplate(template, {
@@ -236,7 +246,8 @@ function SupplierReminderLauncher() {
           vencimento: formatDate(pagamento.vencimento),
         }),
       })))
-      toast.success(`Lembretes enviados: ${resultado.enviados}.${resultado.falhas ? ` Falhas: ${resultado.falhas}.` : ""}`)
+      await mutate()
+      toast.success(`Responsáveis salvos. Lembretes enviados: ${resultado.enviados}.${resultado.falhas ? ` Falhas: ${resultado.falhas}.` : ""}`)
       setOpen(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha no envio.")
@@ -252,7 +263,7 @@ function SupplierReminderLauncher() {
         open={open}
         onOpenChange={setOpen}
         titulo="Lembrete de pagamento de fornecedor"
-        descricao="Escolha o lançamento e marque o fornecedor, um ou vários responsáveis internos."
+        descricao="Escolha o fornecedor e uma ou várias pessoas internas. A seleção interna ficará salva como responsável pelo pagamento."
         recipients={recipients}
         selecionados={selecionados}
         setSelecionados={setSelecionados}
@@ -282,7 +293,8 @@ function SupplierReminderLauncher() {
 }
 
 function MotoboyReminderLauncher() {
-  const { data: pagamentos } = useTable<PagamentoMotoboy>("pagamentos_motoboys", { column: "data", ascending: false })
+  const supabase = createClient()
+  const { data: pagamentos, mutate } = useTable<PagamentoMotoboy>("pagamentos_motoboys", { column: "data", ascending: false })
   const { data: motoboys } = useTable<Motoboy>("motoboys", { column: "nome" })
   const { data: colaboradores } = useTable<Colaborador>("colaboradores", { column: "nome" })
   const { data: configuracoes } = useTable<Configuracao>("configuracoes")
@@ -303,6 +315,7 @@ function MotoboyReminderLauncher() {
     const destinos = montarDestinosMotoboy(proximo, motoboys, colaboradores)
     const mapa = configMap(configuracoes)
     const ids = new Set(lerIds(mapa[CHAVES.motoboyIds]))
+    for (const responsavelId of proximo?.responsavel_ids ?? []) ids.add(responsavelId)
     if (proximo?.responsavel) {
       colaboradores.filter((pessoa) => normalizar(pessoa.nome) === normalizar(proximo.responsavel)).forEach((pessoa) => ids.add(pessoa.id))
     }
@@ -332,10 +345,18 @@ function MotoboyReminderLauncher() {
     const destinos = recipients.filter((pessoa) => selecionados.includes(pessoa.id))
     const motoboy = destinos.find((destino) => destino.locked)
     if (!motoboy) return toast.error("O motoboy precisa ter WhatsApp cadastrado para receber o fechamento.")
+    const responsaveis = colaboradores.filter((pessoa) => selecionados.includes(pessoa.id))
     const mapa = configMap(configuracoes)
     const template = mapa[TEMPLATE_KEYS.motoboy] || "Olá {nome}! Salgadou: fechamento do dia {data} - {entregas} entregas. Total a receber: {total}. PIX: {pix}."
     setEnviando(true)
     try {
+      const { error } = await supabase.from("pagamentos_motoboys").update({
+        responsavel_ids: responsaveis.map((pessoa) => pessoa.id),
+        responsavel_nomes: responsaveis.map((pessoa) => pessoa.nome),
+        responsavel: responsaveis[0]?.nome ?? null,
+      }).eq("id", pagamento.id)
+      if (error) throw error
+
       const resultado = await enviarLote("pagamento_motoboy", destinos.map((pessoa) => ({
         numero: pessoa.numero,
         mensagem: preencherTemplate(template, {
@@ -347,7 +368,8 @@ function MotoboyReminderLauncher() {
           pix: pagamento.pix || "",
         }),
       })))
-      toast.success(`Fechamento enviado ao motoboy e responsáveis: ${resultado.enviados}.${resultado.falhas ? ` Falhas: ${resultado.falhas}.` : ""}`)
+      await mutate()
+      toast.success(`Responsáveis salvos. Fechamento enviado ao motoboy e responsáveis: ${resultado.enviados}.${resultado.falhas ? ` Falhas: ${resultado.falhas}.` : ""}`)
       setOpen(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha no envio.")
@@ -363,7 +385,7 @@ function MotoboyReminderLauncher() {
         open={open}
         onOpenChange={setOpen}
         titulo="Enviar fechamento do motoboy"
-        descricao="O motoboy é obrigatório. Marque também um ou vários responsáveis internos pelo pagamento."
+        descricao="O motoboy é obrigatório. As pessoas internas escolhidas ficarão salvas como responsáveis pelo pagamento."
         recipients={recipients}
         selecionados={selecionados}
         setSelecionados={setSelecionadosProtegidos}
@@ -475,7 +497,7 @@ function RecipientDialog({
   setSelecionados: (ids: string[]) => void
   enviando: boolean
   onEnviar: () => void
-  extra?: React.ReactNode
+  extra?: ReactNode
 }) {
   function alternar(recipient: Recipient) {
     if (recipient.locked) return
@@ -504,18 +526,16 @@ function RecipientDialog({
               Destinatários
               <Badge variant="outline">{selecionados.length}</Badge>
             </div>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setSelecionados(todosSelecionados
-                  ? recipients.filter((recipient) => recipient.locked).map((recipient) => recipient.id)
-                  : recipients.map((recipient) => recipient.id))}
-              >
-                {todosSelecionados ? "Limpar opcionais" : "Selecionar todos"}
-              </Button>
-            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setSelecionados(todosSelecionados
+                ? recipients.filter((recipient) => recipient.locked).map((recipient) => recipient.id)
+                : recipients.map((recipient) => recipient.id))}
+            >
+              {todosSelecionados ? "Limpar opcionais" : "Selecionar todos"}
+            </Button>
           </div>
           <div className="grid max-h-72 gap-2 overflow-y-auto pr-1">
             {recipients.length === 0 ? (
