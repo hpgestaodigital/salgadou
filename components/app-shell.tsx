@@ -24,9 +24,7 @@ import {
   Presentation,
   Target,
   ShoppingCart,
-  Snowflake,
   BookOpenText,
-  Soup,
   PlugZap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -38,6 +36,7 @@ import { useTable } from "@/lib/use-data"
 import type { Configuracao } from "@/lib/types"
 import { carregarPermissoes, type Modulo, type Permissoes } from "@/lib/access-control"
 import { GlobalGoalsBar } from "@/components/dashboard-goals"
+import { CoxinhaIcon, SauceBottleIcon } from "@/components/sidebar-food-icons"
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, modulo: "dashboard" as Modulo },
@@ -46,8 +45,8 @@ const NAV = [
   { href: "/reunioes", label: "Reuniões", icon: MessagesSquare, modulo: "reunioes" as Modulo },
   { href: "/producao", label: "Produção", icon: Factory, modulo: "producao" as const },
   { href: "/receitas", label: "Ficha Técnica", icon: BookOpenText, modulo: "producao" as const },
-  { href: "/molhos", label: "Molhos", icon: Soup, modulo: "producao" as const },
-  { href: "/estoque-salgadinhos", label: "Estoque de Salgadinhos", icon: Snowflake, modulo: "producao" as const },
+  { href: "/molhos", label: "Molhos", icon: SauceBottleIcon, modulo: "producao" as const },
+  { href: "/estoque-salgadinhos", label: "Estoque de Salgadinhos", icon: CoxinhaIcon, modulo: "producao" as const },
   { href: "/integracoes", label: "Integrações", icon: PlugZap, modulo: "producao" as const },
   { href: "/mercado", label: "Mercado", icon: ShoppingCart, modulo: "mercado" as Modulo },
   { href: "/financeiro", label: "Leitor de Planilha", icon: Landmark, modulo: "financeiro" as Modulo },
