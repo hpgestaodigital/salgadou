@@ -2,7 +2,7 @@
 -- Remove a compatibilidade temporária concedida à versão anterior da aplicação.
 
 revoke select on table public.colaboradores from authenticated;
-grant select (id, nome, tipo, funcao, ativo, created_at, notificacoes_whatsapp)
+grant select (id, nome, tipo, funcao, ativo, created_at, notificacoes_whatsapp, participa_escala)
   on table public.colaboradores to authenticated;
 
 revoke select on table public.motoboys from authenticated;

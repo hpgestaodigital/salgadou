@@ -1,6 +1,7 @@
 "use client"
 
 import useSWR from "swr"
+import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 
 const PROTECTED_TABLE_RPCS: Record<string, string> = {
@@ -13,14 +14,21 @@ const PROTECTED_TABLE_RPCS: Record<string, string> = {
 
 export function useTable<T>(table: string, orderBy?: { column: string; ascending?: boolean }) {
   const supabase = createClient()
-  const key = `table:${table}:${orderBy?.column ?? ""}:${orderBy?.ascending ?? ""}`
+  const pathname = usePathname()
+  const escalaScope = table === "colaboradores" && pathname.startsWith("/escala")
+  const key = `table:${table}:${orderBy?.column ?? ""}:${orderBy?.ascending ?? ""}:${escalaScope ? "escala" : "geral"}`
 
   const { data, error, isLoading, mutate } = useSWR<T[]>(key, async () => {
     const protectedRpc = PROTECTED_TABLE_RPCS[table]
     if (protectedRpc) {
       const { data, error } = await supabase.rpc(protectedRpc)
       if (error) throw error
-      const rows = [...((data ?? []) as T[])]
+      let rows = [...((data ?? []) as T[])]
+
+      if (escalaScope) {
+        rows = rows.filter((row) => (row as { participa_escala?: boolean }).participa_escala !== false)
+      }
+
       if (orderBy) {
         const column = orderBy.column as keyof T
         const direction = orderBy.ascending ?? true
