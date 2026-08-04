@@ -57,7 +57,7 @@ export function EscalaView() {
 
   useEffect(() => {
     let ativo = true
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(({ data }: { data: { user: import("@supabase/supabase-js").User | null } }) => {
       if (!ativo) return
       setPodeEditar(["admin", "socio"].includes(getPapel(data.user)))
     })
