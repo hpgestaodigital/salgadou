@@ -7,10 +7,12 @@ import { createClient } from "@/lib/supabase/client"
 import { mensagemErroSupabase } from "@/lib/supabase/friendly-error"
 import { useTable } from "@/lib/use-data"
 import {
+  TIPOS_CHAVE_PIX,
   TIPOS_COLABORADOR,
   isSocio,
   labelValorColaborador,
   type Colaborador,
+  type PixTipo,
 } from "@/lib/types"
 import { formatBRL } from "@/lib/format"
 import { ConfirmDeleteButton } from "@/components/confirm-button"
@@ -29,6 +31,8 @@ const vazio = {
   nome: "",
   funcao: "",
   whatsapp: "",
+  pix: "",
+  pix_tipo: "" as PixTipo | "",
   tipo: "Diarista / Freelancer",
   modalidade: "diaria",
   periodicidade: "por_dia",
@@ -36,6 +40,10 @@ const vazio = {
   observacoes: "",
   ativo: true,
   notificacoes_whatsapp: true,
+}
+
+function labelPix(tipo?: PixTipo | null) {
+  return TIPOS_CHAVE_PIX.find((item) => item.value === tipo)?.label ?? "Tipo não informado"
 }
 
 export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto?: "socios" | "colaboradores" }) {
@@ -61,6 +69,8 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
       nome: c.nome,
       funcao: c.funcao ?? "",
       whatsapp: c.whatsapp ?? "",
+      pix: c.pix ?? "",
+      pix_tipo: c.pix_tipo ?? "",
       tipo: socio ? "Sócio" : c.tipo ?? vazio.tipo,
       modalidade: socio ? "pro_labore" : c.modalidade_pagamento ?? (c.tipo?.startsWith("Diarista") ? "diaria" : "contrato"),
       periodicidade: socio ? "mensal" : c.periodicidade_pagamento ?? (c.tipo?.startsWith("Diarista") ? "por_dia" : "mensal"),
@@ -74,12 +84,15 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
 
   async function salvar() {
     if (!form.nome.trim()) return toast.error("Informe o nome.")
+    if (form.pix && !form.pix_tipo) return toast.error("Selecione o tipo da chave PIX.")
     setSaving(true)
     try {
       const payloadBase = {
         nome: form.nome.trim(),
         funcao: form.funcao || null,
         whatsapp: form.whatsapp || null,
+        pix: form.pix || null,
+        pix_tipo: form.pix ? form.pix_tipo || null : null,
         tipo: socio ? "Sócio" : form.tipo,
         valor_diaria: Number(form.valor) || 0,
         ativo: form.ativo,
@@ -92,15 +105,9 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
         observacoes_contrato: form.observacoes || null,
         notificacoes_whatsapp: form.notificacoes_whatsapp,
       }
-      let { error } = editId
+      const { error } = editId
         ? await supabase.from("colaboradores").update(payload).eq("id", editId)
         : await supabase.from("colaboradores").insert(payload)
-      if (error && (error.code === "PGRST204" || error.code === "42703")) {
-        const legacyResult = editId
-          ? await supabase.from("colaboradores").update(payloadBase).eq("id", editId)
-          : await supabase.from("colaboradores").insert(payloadBase)
-        error = legacyResult.error
-      }
       if (error) throw error
       toast.success(editId ? "Cadastro atualizado." : `${socio ? "Sócio" : "Colaborador"} cadastrado.`)
       setOpen(false)
@@ -115,10 +122,7 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
 
   async function excluir(id: string) {
     const { error } = await supabase.from("colaboradores").delete().eq("id", id)
-    if (error) {
-      toast.error("Erro ao excluir.")
-      return
-    }
+    if (error) return toast.error("Erro ao excluir.")
     toast.success("Cadastro excluído.")
     mutate()
   }
@@ -130,14 +134,9 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          {socio
-            ? "Sócios recebem pró-labore e permanecem separados da equipe operacional."
-            : "Configure diaristas, freelancers e prestadores com pagamento fixo."}
+          {socio ? "Sócios recebem pró-labore e permanecem separados da equipe operacional." : "Configure diaristas, freelancers e prestadores com pagamento fixo."}
         </p>
-        <Button onClick={abrirNovo} className="shrink-0">
-          <Plus className="size-4" />
-          Novo {tituloPessoa}
-        </Button>
+        <Button onClick={abrirNovo} className="shrink-0"><Plus className="size-4" />Novo {tituloPessoa}</Button>
       </div>
 
       <Card className="overflow-hidden p-0">
@@ -149,6 +148,7 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
                 <TableHead>Função</TableHead>
                 {!socio && <TableHead>Forma de contratação</TableHead>}
                 <TableHead>WhatsApp</TableHead>
+                <TableHead>Chave PIX</TableHead>
                 <TableHead className="text-right">{valorLabel}</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
@@ -156,31 +156,27 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="h-24 text-center">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="h-24 text-center">Carregando...</TableCell></TableRow>
               ) : exibidos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                    Nenhum {tituloPessoa} cadastrado.
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={8} className="h-24 text-center text-muted-foreground">Nenhum {tituloPessoa} cadastrado.</TableCell></TableRow>
               ) : exibidos.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="font-semibold">{c.nome}</TableCell>
                   <TableCell className="text-muted-foreground">{c.funcao || "—"}</TableCell>
                   {!socio && <TableCell>{c.tipo || "—"}</TableCell>}
                   <TableCell className="text-muted-foreground">{c.whatsapp || "—"}</TableCell>
+                  <TableCell>
+                    <span className="block text-muted-foreground">{c.pix || "—"}</span>
+                    {c.pix && <span className="block text-xs text-muted-foreground">{labelPix(c.pix_tipo)}</span>}
+                  </TableCell>
                   <TableCell className="text-right">
                     <span className="block">{formatBRL(c.valor_diaria)}</span>
                     {!socio && <span className="text-xs text-muted-foreground">{labelValorColaborador(c.tipo)}</span>}
                   </TableCell>
-                  <TableCell>
-                    <Badge variant={c.ativo ? "default" : "secondary"}>{c.ativo ? "Ativo" : "Inativo"}</Badge>
-                  </TableCell>
+                  <TableCell><Badge variant={c.ativo ? "default" : "secondary"}>{c.ativo ? "Ativo" : "Inativo"}</Badge></TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => abrirEdicao(c)} aria-label="Editar">
-                        <Pencil className="size-4" />
-                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => abrirEdicao(c)} aria-label="Editar"><Pencil className="size-4" /></Button>
                       <ConfirmDeleteButton onConfirm={() => excluir(c.id)} />
                     </div>
                   </TableCell>
@@ -192,7 +188,7 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editId ? "Editar" : "Novo"} {tituloPessoa}</DialogTitle></DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5 sm:col-span-2">
@@ -201,25 +197,32 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor={`${contexto}-funcao`}>{socio ? "Área de atuação" : "Função / Serviço"}</Label>
-              <Input
-                id={`${contexto}-funcao`}
-                value={form.funcao}
-                onChange={(e) => setForm({ ...form, funcao: e.target.value })}
-                placeholder={socio ? "Ex.: Financeiro" : "Ex.: Produção, design"}
-              />
+              <Input id={`${contexto}-funcao`} value={form.funcao} onChange={(e) => setForm({ ...form, funcao: e.target.value })} placeholder={socio ? "Ex.: Financeiro" : "Ex.: Produção, design"} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor={`${contexto}-wpp`}>WhatsApp</Label>
               <Input id={`${contexto}-wpp`} value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Tipo da chave PIX</Label>
+              <Select value={form.pix_tipo || "sem_tipo"} onValueChange={(value) => setForm({ ...form, pix_tipo: value === "sem_tipo" ? "" : value as PixTipo })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sem_tipo">Não informado</SelectItem>
+                  {TIPOS_CHAVE_PIX.map((tipo) => <SelectItem key={tipo.value} value={tipo.value}>{tipo.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor={`${contexto}-pix`}>Chave PIX</Label>
+              <Input id={`${contexto}-pix`} value={form.pix} onChange={(e) => setForm({ ...form, pix: e.target.value })} placeholder="Digite a chave" />
             </div>
             {!socio && (
               <div className="grid gap-1.5 sm:col-span-2">
                 <Label>Forma de contratação e pagamento</Label>
                 <Select value={form.tipo} onValueChange={(tipo) => setForm({ ...form, tipo: tipo ?? "" })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TIPOS_COLABORADOR.map((tipo) => <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>)}
-                  </SelectContent>
+                  <SelectContent>{TIPOS_COLABORADOR.map((tipo) => <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}
@@ -252,30 +255,11 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
             )}
             <div className="grid gap-1.5 sm:col-span-2">
               <Label htmlFor={`${contexto}-valor`}>{socio ? "Pró-labore (R$)" : `${labelValorColaborador(form.tipo)} (R$)`}</Label>
-              <Input
-                id={`${contexto}-valor`}
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.valor}
-                onChange={(e) => setForm({ ...form, valor: e.target.value })}
-                placeholder="0,00"
-              />
-              {!socio && (
-                <p className="text-xs text-muted-foreground">
-                  Para contratos, informe o valor integral referente à periodicidade selecionada.
-                </p>
-              )}
+              <Input id={`${contexto}-valor`} type="number" min="0" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="0,00" />
             </div>
             <div className="grid gap-1.5 sm:col-span-2">
               <Label htmlFor={`${contexto}-observacoes`}>{socio ? "Observações do pró-labore" : "Condições e observações do contrato"}</Label>
-              <Textarea
-                id={`${contexto}-observacoes`}
-                rows={3}
-                value={form.observacoes}
-                onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
-                placeholder={socio ? "Ex.: data prevista para pagamento" : "Ex.: escopo, vencimento, reajuste ou condições combinadas"}
-              />
+              <Textarea id={`${contexto}-observacoes`} rows={3} value={form.observacoes} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} />
             </div>
             <div className="flex items-center justify-between rounded-lg border px-4 py-3 sm:col-span-2">
               <Label htmlFor={`${contexto}-ativo`}>Cadastro ativo</Label>
@@ -286,18 +270,12 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
                 <Label htmlFor={`${contexto}-notificacoes`}>Receber notificações no WhatsApp</Label>
                 <p className="mt-1 text-xs text-muted-foreground">Usa o número informado neste cadastro.</p>
               </div>
-              <Switch
-                id={`${contexto}-notificacoes`}
-                checked={form.notificacoes_whatsapp}
-                onCheckedChange={(notificacoes_whatsapp) => setForm({ ...form, notificacoes_whatsapp })}
-              />
+              <Switch id={`${contexto}-notificacoes`} checked={form.notificacoes_whatsapp} onCheckedChange={(notificacoes_whatsapp) => setForm({ ...form, notificacoes_whatsapp })} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={salvar} disabled={saving}>
-              {saving && <Loader2 className="size-4 animate-spin" />} Salvar
-            </Button>
+            <Button onClick={salvar} disabled={saving}>{saving && <Loader2 className="size-4 animate-spin" />}Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
