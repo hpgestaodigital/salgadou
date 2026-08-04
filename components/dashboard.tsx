@@ -101,6 +101,8 @@ export function Dashboard() {
   const mostrarAgenda = Boolean(permissoes?.dashboard_calendario_producao)
   const mostrarFornecedores = Boolean(permissoes?.dashboard_fornecedores)
   const mostrarMotoboys = Boolean(permissoes?.dashboard_motoboys)
+  const podeAbrirFornecedores = Boolean(permissoes?.pagamentos_fornecedores)
+  const podeAbrirMotoboys = Boolean(permissoes?.pagamentos_motoboys)
   const mostrarFinanceiro = mostrarFornecedores || mostrarMotoboys
   const mostrarProducao = Boolean(
     permissoes?.producao_planejamento || permissoes?.producao_estoque || permissoes?.producao_compras,
@@ -112,6 +114,12 @@ export function Dashboard() {
   const totalFinanceiro =
     (mostrarFornecedores ? Number(resumo.fornecedores_pendentes) : 0) +
     (mostrarMotoboys ? Number(resumo.motoboys_pendentes) : 0)
+  const hrefFinanceiro =
+    mostrarFornecedores && podeAbrirFornecedores
+      ? "/pagamentos-fornecedores"
+      : mostrarMotoboys && podeAbrirMotoboys
+        ? "/pagamentos-motoboys"
+        : undefined
   const atrasados = useMemo(
     () => meuTrabalho.filter((item) => item.prazo && item.prazo < todayISO()).length,
     [meuTrabalho],
@@ -151,7 +159,7 @@ export function Dashboard() {
             title="Resumo financeiro"
             value={formatBRL(valorFinanceiro)}
             detail={`${totalFinanceiro} pagamento(s) pendente(s)`}
-            href={mostrarFornecedores ? "/pagamentos-fornecedores" : "/pagamentos-motoboys"}
+            href={hrefFinanceiro}
           />
         )}
         {mostrarProducao && (
@@ -194,7 +202,7 @@ export function Dashboard() {
               title="Fornecedores"
               value={Number(resumo.fornecedores_valor)}
               count={Number(resumo.fornecedores_pendentes)}
-              href="/pagamentos-fornecedores"
+              href={podeAbrirFornecedores ? "/pagamentos-fornecedores" : undefined}
             />
           )}
           {mostrarMotoboys && (
@@ -203,7 +211,7 @@ export function Dashboard() {
               title="Motoboys"
               value={Number(resumo.motoboys_valor)}
               count={Number(resumo.motoboys_pendentes)}
-              href="/pagamentos-motoboys"
+              href={podeAbrirMotoboys ? "/pagamentos-motoboys" : undefined}
             />
           )}
         </section>
@@ -290,19 +298,31 @@ function MyWorkCard({ itens, loading }: { itens: ItemTrabalho[]; loading: boolea
   )
 }
 
-function FinancialCard({ icon: Icon, title, value, count, href }: { icon: typeof Truck; title: string; value: number; count: number; href: string }) {
-  return (
-    <Link href={href}>
-      <Card className="transition-colors hover:border-primary/50">
-        <CardContent className="flex items-center justify-between gap-4 p-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
-            <p className="mt-2 font-heading text-2xl font-bold">{formatBRL(value)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{count} pagamento(s) pendente(s)</p>
-          </div>
-          <Icon className="size-7 text-primary" />
-        </CardContent>
-      </Card>
-    </Link>
+function FinancialCard({
+  icon: Icon,
+  title,
+  value,
+  count,
+  href,
+}: {
+  icon: typeof Truck
+  title: string
+  value: number
+  count: number
+  href?: string
+}) {
+  const content = (
+    <Card className={`transition-colors ${href ? "hover:border-primary/50" : ""}`}>
+      <CardContent className="flex items-center justify-between gap-4 p-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+          <p className="mt-2 font-heading text-2xl font-bold">{formatBRL(value)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{count} pagamento(s) pendente(s)</p>
+          {!href && <p className="mt-1 text-xs text-muted-foreground">Resumo somente para consulta.</p>}
+        </div>
+        <Icon className="size-7 text-primary" />
+      </CardContent>
+    </Card>
   )
+  return href ? <Link href={href}>{content}</Link> : content
 }
