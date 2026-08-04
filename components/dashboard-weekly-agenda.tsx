@@ -7,15 +7,11 @@ import { addDaysISO, formatDate, weekLabel } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
-const DIAS_UTEIS = [
-  { key: "seg", label: "Segunda", offset: 0 },
+const DIAS_ESCALA = [
   { key: "ter", label: "Terça", offset: 1 },
   { key: "qua", label: "Quarta", offset: 2 },
   { key: "qui", label: "Quinta", offset: 3 },
   { key: "sex", label: "Sexta", offset: 4 },
-] as const
-
-const FIM_DE_SEMANA = [
   { key: "sab", label: "Sábado", offset: 5 },
   { key: "dom", label: "Domingo", offset: 6 },
 ] as const
@@ -94,7 +90,6 @@ export function DashboardWeeklyAgenda({ semanaInicio }: { semanaInicio: string }
     [reunioes],
   )
   const escopoPessoal = escalas.length > 0 && escalas.every((item) => item.escopo === "pessoal")
-  const possuiFimDeSemana = escalas.some((item) => Boolean(item.sab?.trim() || item.dom?.trim()))
 
   return (
     <Card className="overflow-hidden">
@@ -158,7 +153,6 @@ export function DashboardWeeklyAgenda({ semanaInicio }: { semanaInicio: string }
             <>
               <DesktopWeekGrid escalas={escalas} semanaInicio={semanaInicio} />
               <MobileWeekCards escalas={escalas} semanaInicio={semanaInicio} />
-              {possuiFimDeSemana && <WeekendGrid escalas={escalas} semanaInicio={semanaInicio} />}
             </>
           )}
         </section>
@@ -170,13 +164,13 @@ export function DashboardWeeklyAgenda({ semanaInicio }: { semanaInicio: string }
 }
 
 function DesktopWeekGrid({ escalas, semanaInicio }: { escalas: EscalaDashboard[]; semanaInicio: string }) {
-  const colunas = "grid-cols-[minmax(145px,1.25fr)_repeat(5,minmax(92px,1fr))]"
+  const colunas = "grid-cols-[minmax(145px,1.25fr)_repeat(6,minmax(88px,1fr))]"
 
   return (
     <div className="hidden overflow-hidden rounded-xl border md:block">
       <div className={`grid ${colunas} bg-muted/40`}>
         <div className="border-r px-3 py-2.5 text-xs font-semibold text-muted-foreground">Pessoa</div>
-        {DIAS_UTEIS.map((dia) => (
+        {DIAS_ESCALA.map((dia) => (
           <div key={dia.key} className="border-r px-2 py-2 text-center last:border-r-0">
             <p className="text-xs font-bold">{dia.label}</p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">{dataCurta(addDaysISO(semanaInicio, dia.offset))}</p>
@@ -190,7 +184,7 @@ function DesktopWeekGrid({ escalas, semanaInicio }: { escalas: EscalaDashboard[]
             <p className="truncate text-sm font-semibold">{escala.nome}</p>
             {escala.funcao && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{escala.funcao}</p>}
           </div>
-          {DIAS_UTEIS.map((dia) => (
+          {DIAS_ESCALA.map((dia) => (
             <ScheduleCell key={dia.key} value={escala[dia.key]} />
           ))}
         </div>
@@ -207,8 +201,8 @@ function MobileWeekCards({ escalas, semanaInicio }: { escalas: EscalaDashboard[]
           <p className="font-semibold">{escala.nome}</p>
           {escala.funcao && <p className="text-xs text-muted-foreground">{escala.funcao}</p>}
           <div className="mt-3 grid grid-cols-2 gap-2">
-            {DIAS_UTEIS.map((dia, indice) => (
-              <div key={dia.key} className={`rounded-lg bg-muted/25 p-2 ${indice === DIAS_UTEIS.length - 1 ? "col-span-2" : ""}`}>
+            {DIAS_ESCALA.map((dia) => (
+              <div key={dia.key} className="rounded-lg bg-muted/25 p-2">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{dia.label} · {dataCurta(addDaysISO(semanaInicio, dia.offset))}</p>
                 <p className={`mt-1 whitespace-pre-line text-xs ${escala[dia.key]?.trim() ? "font-semibold" : "text-muted-foreground"}`}>
                   {escala[dia.key]?.trim() || "—"}
@@ -218,34 +212,6 @@ function MobileWeekCards({ escalas, semanaInicio }: { escalas: EscalaDashboard[]
           </div>
         </article>
       ))}
-    </div>
-  )
-}
-
-function WeekendGrid({ escalas, semanaInicio }: { escalas: EscalaDashboard[]; semanaInicio: string }) {
-  const pessoas = escalas.filter((item) => item.sab?.trim() || item.dom?.trim())
-  const colunas = "grid-cols-[minmax(145px,1.25fr)_repeat(2,minmax(120px,1fr))]"
-
-  return (
-    <div className="mt-4">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fim de semana</p>
-      <div className="overflow-hidden rounded-xl border">
-        <div className={`grid ${colunas} bg-muted/40`}>
-          <div className="border-r px-3 py-2 text-xs font-semibold text-muted-foreground">Pessoa</div>
-          {FIM_DE_SEMANA.map((dia) => (
-            <div key={dia.key} className="border-r px-2 py-2 text-center last:border-r-0">
-              <p className="text-xs font-bold">{dia.label}</p>
-              <p className="mt-0.5 text-[10px] text-muted-foreground">{dataCurta(addDaysISO(semanaInicio, dia.offset))}</p>
-            </div>
-          ))}
-        </div>
-        {pessoas.map((escala, indice) => (
-          <div key={escala.colaborador_id} className={`grid ${colunas} ${indice > 0 ? "border-t" : ""}`}>
-            <div className="min-w-0 border-r px-3 py-3 text-sm font-semibold">{escala.nome}</div>
-            {FIM_DE_SEMANA.map((dia) => <ScheduleCell key={dia.key} value={escala[dia.key]} />)}
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
