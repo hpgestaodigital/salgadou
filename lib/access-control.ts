@@ -4,12 +4,9 @@ import { getPapel, type Papel } from "@/lib/auth-roles"
 
 export const MODULOS = [
   { key: "dashboard", label: "Dashboard", href: "/" },
-  { key: "dashboard_calendario_producao", label: "Calendário da produção", href: "/" },
-  { key: "dashboard_fornecedores", label: "Pagamentos de fornecedores", href: "/" },
-  { key: "dashboard_motoboys", label: "Pagamentos de motoboys", href: "/" },
-  { key: "dashboard_equipe_ativa", label: "Equipe ativa", href: "/" },
-  { key: "dashboard_pendencias_colaboradores", label: "Pendências — Colaboradores", href: "/" },
-  { key: "dashboard_pendencias_socios", label: "Pendências — Sócios", href: "/" },
+  { key: "dashboard_calendario_producao", label: "Agenda da semana", href: "/" },
+  { key: "dashboard_fornecedores", label: "Resumo de fornecedores", href: "/" },
+  { key: "dashboard_motoboys", label: "Resumo de motoboys", href: "/" },
   { key: "escala", label: "Escala Semanal", href: "/escala" },
   { key: "kanban", label: "Kanban", href: "/kanban" },
   { key: "reunioes", label: "Reuniões", href: "/reunioes" },
@@ -31,6 +28,33 @@ export const MODULOS = [
 export type Modulo = (typeof MODULOS)[number]["key"]
 export type Permissoes = Partial<Record<Modulo, boolean>>
 
+function fallbackPorPapel(papel: Papel): Permissoes {
+  if (papel === "admin") return Object.fromEntries(MODULOS.map((item) => [item.key, true])) as Permissoes
+  if (papel === "socio") {
+    return {
+      dashboard: true,
+      dashboard_calendario_producao: true,
+      escala: true,
+      kanban: true,
+      reunioes: true,
+    }
+  }
+  if (papel === "financeiro") {
+    return {
+      dashboard: true,
+      dashboard_fornecedores: true,
+      dashboard_motoboys: true,
+      financeiro: true,
+      pagamentos_fornecedores: true,
+      pagamentos_motoboys: true,
+    }
+  }
+  if (papel === "juridico") {
+    return { dashboard: true, dashboard_calendario_producao: true, juridico: true }
+  }
+  return { dashboard: true, dashboard_calendario_producao: true }
+}
+
 export async function carregarPermissoes(user: User): Promise<Permissoes> {
   const supabase = createClient()
   const papel: Papel = getPapel(user)
@@ -41,22 +65,16 @@ export async function carregarPermissoes(user: User): Promise<Permissoes> {
       supabase.from("usuarios_permissoes").select("modulo, pode_visualizar").eq("usuario_id", user.id),
     ])
 
-  if (padraoError || individualError) {
-    if (papel === "admin" || papel === "financeiro" || papel === "socio") {
-      return Object.fromEntries(MODULOS.map((item) => [item.key, true])) as Permissoes
-    }
-    if (papel === "juridico") return { juridico: true }
-    return { dashboard: true, dashboard_calendario_producao: true, dashboard_equipe_ativa: true, dashboard_pendencias_colaboradores: true, dashboard_pendencias_socios: true, escala: true, kanban: true }
-  }
+  if (padraoError || individualError) return fallbackPorPapel(papel)
 
   const resultado: Permissoes = {}
   for (const item of padrao ?? []) resultado[item.modulo as Modulo] = item.pode_visualizar
   for (const item of individuais ?? []) resultado[item.modulo as Modulo] = item.pode_visualizar
-  if (papel === "colaborador") {
-    resultado.dashboard = true
-    resultado.dashboard_calendario_producao = true
-    resultado.escala = true
-    resultado.kanban = true
+
+  if (papel !== "admin" && papel !== "socio") {
+    resultado.escala = false
+    resultado.kanban = false
   }
+
   return resultado
 }
