@@ -103,7 +103,8 @@ export function PermissoesUsuarioDialog({
     setPermissoes((atual) => ({ ...atual, [modulo]: !atual[modulo] }))
   }
 
-  function selecionarPapel(value: string) {
+  function selecionarPapel(value: string | null) {
+    if (!value) return
     const novoPapel = value as Papel
     setPapel(novoPapel)
     setPermissoes(permissoesPadrao(novoPapel))
