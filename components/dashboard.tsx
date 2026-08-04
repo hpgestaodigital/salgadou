@@ -21,7 +21,7 @@ import { useTable } from "@/lib/use-data"
 import type { Configuracao } from "@/lib/types"
 import { DashboardGoals } from "@/components/dashboard-goals"
 import { DashboardProductionCalendar } from "@/components/dashboard-production-calendar"
-import { DashboardWeeklyAgenda } from "@/components/dashboard-weekly-agenda"
+import { DashboardWeeklyScale } from "@/components/dashboard-weekly-agenda"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -184,15 +184,12 @@ export function Dashboard() {
       </section>
 
       <section className={`mt-4 grid items-start gap-4 ${mostrarAgenda ? "xl:grid-cols-[0.85fr_1.15fr]" : ""}`}>
-        <MyWorkCard itens={meuTrabalho} loading={loading} />
+        <div className="grid content-start gap-4">
+          <MyWorkCard itens={meuTrabalho} loading={loading} />
+          {mostrarAgenda && <DashboardWeeklyScale semanaInicio={semanaInicio} />}
+        </div>
         {mostrarAgenda && <DashboardProductionCalendar />}
       </section>
-
-      {mostrarAgenda && (
-        <section className="mt-4">
-          <DashboardWeeklyAgenda semanaInicio={semanaInicio} />
-        </section>
-      )}
 
       {mostrarFinanceiro && (
         <section aria-label="Resumo financeiro" className="mt-4 grid gap-4 md:grid-cols-2">
