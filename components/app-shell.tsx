@@ -105,7 +105,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       })
     }
 
-    supabase.auth.getUser().then(({ data }) => carregarSessao(data.user))
+    supabase.auth.getUser().then(({ data }: { data: { user: import("@supabase/supabase-js").User | null } }) => carregarSessao(data.user))
     const { data: sub } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       void carregarSessao(session?.user ?? null)
     })
