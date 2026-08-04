@@ -25,6 +25,16 @@ function labelPix(tipo?: PixTipo | null) {
   return TIPOS_CHAVE_PIX.find((item) => item.value === tipo)?.label ?? "Tipo não informado"
 }
 
+function inferirTipoPix(chave?: string | null): PixTipo | "" {
+  const valor = (chave ?? "").trim().toLowerCase()
+  if (!valor) return ""
+  if (valor.includes("(cpf)")) return "cpf"
+  if (valor.includes("(cnpj)")) return "cnpj"
+  if (valor.includes("(celular)") || valor.includes("(telefone)")) return "celular"
+  if (valor.includes("@")) return "email"
+  return ""
+}
+
 export function CadastroMotoboys() {
   const supabase = createClient()
   const { data, isLoading, mutate } = useTable<Motoboy>("motoboys", { column: "nome" })
@@ -45,7 +55,7 @@ export function CadastroMotoboys() {
     setForm({
       nome: m.nome,
       pix: m.pix ?? "",
-      pix_tipo: m.pix_tipo ?? "",
+      pix_tipo: m.pix_tipo ?? inferirTipoPix(m.pix),
       whatsapp: m.whatsapp ?? "",
       valor_diaria: String(m.valor_diaria ?? ""),
       ativo: m.ativo,
@@ -58,27 +68,38 @@ export function CadastroMotoboys() {
       toast.error("Informe o nome.")
       return
     }
-    if (form.pix && !form.pix_tipo) {
+
+    const pix = form.pix.trim()
+    const pixTipo = form.pix_tipo || inferirTipoPix(pix)
+
+    if (pix && !pixTipo) {
       toast.error("Selecione o tipo da chave PIX.")
       return
     }
+
     setSaving(true)
     try {
       const payload = {
         nome: form.nome.trim(),
-        pix: form.pix || null,
-        pix_tipo: form.pix ? form.pix_tipo || null : null,
-        whatsapp: form.whatsapp || null,
+        pix: pix || null,
+        pix_tipo: pix ? pixTipo || null : null,
+        whatsapp: form.whatsapp.trim() || null,
         valor_diaria: Number(form.valor_diaria) || 0,
         ativo: form.ativo,
       }
-      const { error } = editId
-        ? await supabase.from("motoboys").update(payload).eq("id", editId)
-        : await supabase.from("motoboys").insert(payload)
+
+      const consulta = editId
+        ? supabase.from("motoboys").update(payload).eq("id", editId)
+        : supabase.from("motoboys").insert(payload)
+
+      const { data: salvo, error } = await consulta.select("id, pix, pix_tipo").single()
       if (error) throw error
+      if (!salvo?.id) throw new Error("O banco não confirmou a atualização do motoboy.")
+      if (pix && salvo.pix_tipo !== pixTipo) throw new Error("O tipo da chave PIX não foi persistido.")
+
+      await mutate()
       toast.success(editId ? "Motoboy atualizado." : "Motoboy cadastrado.")
       setOpen(false)
-      mutate()
     } catch (e) {
       console.log("[v0] erro salvar motoboy cadastro:", e)
       toast.error(mensagemErroSupabase(e))
@@ -129,26 +150,29 @@ export function CadastroMotoboys() {
                   <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Nenhum motoboy cadastrado.</TableCell>
                 </TableRow>
               ) : (
-                data.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="font-semibold">{m.nome}</TableCell>
-                    <TableCell>
-                      <span className="block text-muted-foreground">{m.pix || "—"}</span>
-                      {m.pix && <span className="block text-xs text-muted-foreground">{labelPix(m.pix_tipo)}</span>}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{m.whatsapp || "—"}</TableCell>
-                    <TableCell className="text-right">{formatBRL(m.valor_diaria)}</TableCell>
-                    <TableCell>
-                      {m.ativo ? <Badge className="bg-accent text-accent-foreground">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge>}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => abrirEdicao(m)} aria-label="Editar"><Pencil className="size-4" /></Button>
-                        <ConfirmDeleteButton onConfirm={() => excluir(m.id)} />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                data.map((m) => {
+                  const tipoPix = m.pix_tipo ?? inferirTipoPix(m.pix)
+                  return (
+                    <TableRow key={m.id}>
+                      <TableCell className="font-semibold">{m.nome}</TableCell>
+                      <TableCell>
+                        <span className="block text-muted-foreground">{m.pix || "—"}</span>
+                        {m.pix && <span className="block text-xs text-muted-foreground">{labelPix(tipoPix || null)}</span>}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{m.whatsapp || "—"}</TableCell>
+                      <TableCell className="text-right">{formatBRL(m.valor_diaria)}</TableCell>
+                      <TableCell>
+                        {m.ativo ? <Badge className="bg-accent text-accent-foreground">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge>}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => abrirEdicao(m)} aria-label="Editar"><Pencil className="size-4" /></Button>
+                          <ConfirmDeleteButton onConfirm={() => excluir(m.id)} />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
