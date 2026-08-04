@@ -77,6 +77,8 @@ export type PagamentoFornecedor = {
   pago_em: string | null
   comprovante: string | null
   responsavel: string | null
+  responsavel_ids?: string[]
+  responsavel_nomes?: string[]
   anexo_url?: string | null
   anexo_path?: string | null
   created_at: string
@@ -95,6 +97,8 @@ export type PagamentoMotoboy = {
   pago_em: string | null
   observacao: string | null
   responsavel?: string | null
+  responsavel_ids?: string[]
+  responsavel_nomes?: string[]
   anexo_url?: string | null
   anexo_path?: string | null
   rastreio_anexo_url?: string | null
