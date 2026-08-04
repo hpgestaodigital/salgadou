@@ -85,6 +85,7 @@ export async function notificarRegistro(tipo: Tipo, id: string, evento: Evento, 
 
   if (tipo === "fornecedor") {
     const selecionados = new Set(idsConfigurados(config.lembrete_destinatarios_fornecedor))
+    for (const responsavelId of registro.responsavel_ids ?? []) selecionados.add(String(responsavelId))
     if (registro.responsavel) {
       pessoasValidas
         .filter((pessoa) => normalizar(pessoa.nome) === normalizar(registro.responsavel))
@@ -110,6 +111,7 @@ export async function notificarRegistro(tipo: Tipo, id: string, evento: Evento, 
 
   if (tipo === "motoboy") {
     const selecionados = new Set(idsConfigurados(config.lembrete_destinatarios_motoboy))
+    for (const responsavelId of registro.responsavel_ids ?? []) selecionados.add(String(responsavelId))
     if (registro.responsavel) {
       pessoasValidas
         .filter((pessoa) => normalizar(pessoa.nome) === normalizar(registro.responsavel))
