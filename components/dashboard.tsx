@@ -20,6 +20,7 @@ import { formatBRL, formatDate, mondayOf, todayISO } from "@/lib/format"
 import { useTable } from "@/lib/use-data"
 import type { Configuracao } from "@/lib/types"
 import { DashboardGoals } from "@/components/dashboard-goals"
+import { DashboardProductionCalendar } from "@/components/dashboard-production-calendar"
 import { DashboardWeeklyAgenda } from "@/components/dashboard-weekly-agenda"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
@@ -182,17 +183,16 @@ export function Dashboard() {
         )}
       </section>
 
-      <section className="mt-4 grid gap-4 xl:grid-cols-[1fr_1.25fr]">
+      <section className={`mt-4 grid items-start gap-4 ${mostrarAgenda ? "xl:grid-cols-[0.85fr_1.15fr]" : ""}`}>
         <MyWorkCard itens={meuTrabalho} loading={loading} />
-        {mostrarAgenda ? (
-          <DashboardWeeklyAgenda semanaInicio={semanaInicio} />
-        ) : (
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Agenda da semana</CardTitle></CardHeader>
-            <CardContent><p className="text-sm text-muted-foreground">A agenda não está habilitada para este acesso.</p></CardContent>
-          </Card>
-        )}
+        {mostrarAgenda && <DashboardProductionCalendar />}
       </section>
+
+      {mostrarAgenda && (
+        <section className="mt-4">
+          <DashboardWeeklyAgenda semanaInicio={semanaInicio} />
+        </section>
+      )}
 
       {mostrarFinanceiro && (
         <section aria-label="Resumo financeiro" className="mt-4 grid gap-4 md:grid-cols-2">

@@ -7,14 +7,13 @@ import { addDaysISO, formatDate, weekLabel } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
-const DIAS = [
-  { key: "seg", label: "Seg", offset: 0 },
-  { key: "ter", label: "Ter", offset: 1 },
-  { key: "qua", label: "Qua", offset: 2 },
-  { key: "qui", label: "Qui", offset: 3 },
-  { key: "sex", label: "Sex", offset: 4 },
-  { key: "sab", label: "Sáb", offset: 5 },
-  { key: "dom", label: "Dom", offset: 6 },
+const DIAS_ESCALA = [
+  { key: "ter", label: "Terça", offset: 1 },
+  { key: "qua", label: "Quarta", offset: 2 },
+  { key: "qui", label: "Quinta", offset: 3 },
+  { key: "sex", label: "Sexta", offset: 4 },
+  { key: "sab", label: "Sábado", offset: 5 },
+  { key: "dom", label: "Domingo", offset: 6 },
 ] as const
 
 type EscalaDashboard = {
@@ -47,6 +46,10 @@ function horario(inicio: string, fim: string | null) {
   if (!fim) return inicioTexto
   const fimTexto = new Date(fim).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
   return `${inicioTexto}–${fimTexto}`
+}
+
+function dataCurta(data: string) {
+  return formatDate(data).slice(0, 5)
 }
 
 export function DashboardWeeklyAgenda({ semanaInicio }: { semanaInicio: string }) {
@@ -102,7 +105,8 @@ export function DashboardWeeklyAgenda({ semanaInicio }: { semanaInicio: string }
           <Badge variant="outline">Somente leitura</Badge>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-5 p-4 xl:grid-cols-[0.8fr_1.2fr]">
+
+      <CardContent className="grid gap-6 p-4 xl:grid-cols-[0.65fr_1.35fr]">
         <section>
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 text-sm font-semibold"><UsersRound className="size-4 text-primary" />Reuniões</h3>
@@ -135,26 +139,22 @@ export function DashboardWeeklyAgenda({ semanaInicio }: { semanaInicio: string }
           </div>
         </section>
 
-        <section>
+        <section className="min-w-0">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 text-sm font-semibold"><Clock3 className="size-4 text-primary" />{escopoPessoal ? "Minha escala" : "Escala da equipe"}</h3>
             <Badge variant="secondary">{escalas.length}</Badge>
           </div>
-          <div className="grid gap-3">
-            {loading ? (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Carregando escala...</p>
-            ) : escalas.length === 0 ? (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nenhum horário registrado para esta semana.</p>
-            ) : escalas.map((escala) => (
-              <article key={escala.colaborador_id} className="rounded-xl border bg-background/50 p-3">
-                <div className="mb-3">
-                  <p className="font-semibold">{escala.nome}</p>
-                  {escala.funcao && <p className="text-xs text-muted-foreground">{escala.funcao}</p>}
-                </div>
-                <ScheduleRows escala={escala} semanaInicio={semanaInicio} />
-              </article>
-            ))}
-          </div>
+
+          {loading ? (
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Carregando escala...</p>
+          ) : escalas.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nenhum horário registrado para esta semana.</p>
+          ) : (
+            <>
+              <DesktopWeekGrid escalas={escalas} semanaInicio={semanaInicio} />
+              <MobileWeekCards escalas={escalas} semanaInicio={semanaInicio} />
+            </>
+          )}
         </section>
 
         {erro && <p className="text-xs text-amber-600 xl:col-span-2">Parte da agenda não pôde ser carregada. Recarregue a página.</p>}
@@ -163,23 +163,66 @@ export function DashboardWeeklyAgenda({ semanaInicio }: { semanaInicio: string }
   )
 }
 
-function ScheduleRows({ escala, semanaInicio }: { escala: EscalaDashboard; semanaInicio: string }) {
-  const grupos = [DIAS.slice(0, 4), DIAS.slice(4)]
+function DesktopWeekGrid({ escalas, semanaInicio }: { escalas: EscalaDashboard[]; semanaInicio: string }) {
+  const colunas = "grid-cols-[minmax(145px,1.25fr)_repeat(6,minmax(88px,1fr))]"
+
   return (
-    <div className="grid gap-2">
-      {grupos.map((grupo, index) => (
-        <div key={index} className={`grid gap-2 ${grupo.length === 4 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
-          {grupo.map((dia) => {
-            const valor = escala[dia.key]
-            return (
-              <div key={dia.key} className="min-w-0 rounded-lg border bg-muted/20 p-2 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{dia.label} · {formatDate(addDaysISO(semanaInicio, dia.offset)).slice(0, 5)}</p>
-                <p className="mt-1 min-h-8 whitespace-pre-line break-words text-xs font-semibold leading-4">{valor?.trim() || "Sem horário"}</p>
-              </div>
-            )
-          })}
+    <div className="hidden overflow-hidden rounded-xl border md:block">
+      <div className={`grid ${colunas} bg-muted/40`}>
+        <div className="border-r px-3 py-2.5 text-xs font-semibold text-muted-foreground">Pessoa</div>
+        {DIAS_ESCALA.map((dia) => (
+          <div key={dia.key} className="border-r px-2 py-2 text-center last:border-r-0">
+            <p className="text-xs font-bold">{dia.label}</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">{dataCurta(addDaysISO(semanaInicio, dia.offset))}</p>
+          </div>
+        ))}
+      </div>
+
+      {escalas.map((escala, indice) => (
+        <div key={escala.colaborador_id} className={`grid ${colunas} ${indice > 0 ? "border-t" : ""}`}>
+          <div className="min-w-0 border-r px-3 py-3">
+            <p className="truncate text-sm font-semibold">{escala.nome}</p>
+            {escala.funcao && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{escala.funcao}</p>}
+          </div>
+          {DIAS_ESCALA.map((dia) => (
+            <ScheduleCell key={dia.key} value={escala[dia.key]} />
+          ))}
         </div>
       ))}
+    </div>
+  )
+}
+
+function MobileWeekCards({ escalas, semanaInicio }: { escalas: EscalaDashboard[]; semanaInicio: string }) {
+  return (
+    <div className="grid gap-3 md:hidden">
+      {escalas.map((escala) => (
+        <article key={escala.colaborador_id} className="rounded-xl border p-3">
+          <p className="font-semibold">{escala.nome}</p>
+          {escala.funcao && <p className="text-xs text-muted-foreground">{escala.funcao}</p>}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {DIAS_ESCALA.map((dia) => (
+              <div key={dia.key} className="rounded-lg bg-muted/25 p-2">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{dia.label} · {dataCurta(addDaysISO(semanaInicio, dia.offset))}</p>
+                <p className={`mt-1 whitespace-pre-line text-xs ${escala[dia.key]?.trim() ? "font-semibold" : "text-muted-foreground"}`}>
+                  {escala[dia.key]?.trim() || "—"}
+                </p>
+              </div>
+            ))}
+          </div>
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function ScheduleCell({ value }: { value: string | null }) {
+  const preenchido = Boolean(value?.trim())
+  return (
+    <div className="flex min-h-14 items-center justify-center border-r px-2 py-2 text-center last:border-r-0">
+      <p className={`whitespace-pre-line text-xs leading-4 ${preenchido ? "font-semibold" : "text-muted-foreground"}`}>
+        {value?.trim() || "—"}
+      </p>
     </div>
   )
 }
