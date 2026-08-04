@@ -11,6 +11,7 @@ export type Colaborador = {
   funcao: string | null
   ativo: boolean
   notificacoes_whatsapp?: boolean | null
+  participa_escala: boolean
   created_at: string
 }
 
