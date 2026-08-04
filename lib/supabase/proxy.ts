@@ -32,8 +32,7 @@ const DESTINOS = [
   ["reunioes", "/reunioes"], ["producao_planejamento", "/producao"],
   ["producao_estoque", "/producao?tab=estoque"], ["producao_compras", "/producao?tab=compras"],
   ["juridico", "/juridico"], ["historico", "/historico"],
-  ["financeiro", "/financeiro"],
-  ["metas", "/metas"],
+  ["financeiro", "/financeiro"], ["metas", "/metas"],
   ["pagamentos_fornecedores", "/pagamentos-fornecedores"],
   ["pagamentos_motoboys", "/pagamentos-motoboys"], ["cadastros", "/cadastros"],
   ["usuarios", "/usuarios"], ["configuracoes", "/configuracoes"],
@@ -111,39 +110,25 @@ export async function updateSession(request: NextRequest) {
       for (const item of padrao ?? []) permissoes[item.modulo] = item.pode_visualizar
       for (const item of individuais ?? []) permissoes[item.modulo] = item.pode_visualizar
     } else {
-      // Em caso de indisponibilidade da matriz, evita conceder acesso total por perfil.
-      // O administrador mantém acesso de recuperação; os demais recebem apenas o mínimo funcional.
       const administrador = papel === "admin"
       for (const [modulo] of DESTINOS) permissoes[modulo] = administrador
 
       if (papel === "socio") {
-        for (const modulo of ["dashboard", "kanban", "reunioes"]) permissoes[modulo] = true
+        for (const modulo of ["dashboard", "escala", "kanban", "reunioes"]) permissoes[modulo] = true
       }
       if (papel === "financeiro") {
-        for (const modulo of ["dashboard", "financeiro", "pagamentos_fornecedores", "pagamentos_motoboys"]) {
-          permissoes[modulo] = true
-        }
+        for (const modulo of ["dashboard", "financeiro", "pagamentos_fornecedores", "pagamentos_motoboys"]) permissoes[modulo] = true
       }
       if (papel === "juridico") {
         permissoes.dashboard = true
         permissoes.juridico = true
       }
-      if (papel === "colaborador") {
-        for (const modulo of ["dashboard", "escala", "kanban"]) permissoes[modulo] = true
-      }
+      if (papel === "colaborador") permissoes.dashboard = true
     }
 
-    if (papel === "colaborador") {
-      for (const modulo of ["dashboard", "escala", "kanban"]) permissoes[modulo] = true
-    }
-
-    if (pathname.startsWith("/demonstracao") && papel !== "admin") {
-      const destino = DESTINOS.find(([modulo]) => permissoes[modulo])?.[1] || "/auth/sem-acesso"
-      const url = request.nextUrl.clone()
-      const [novoPath, query] = destino.split("?")
-      url.pathname = novoPath
-      url.search = query ? `?${query}` : ""
-      return NextResponse.redirect(url)
+    if (papel !== "admin" && papel !== "socio") {
+      permissoes.escala = false
+      permissoes.kanban = false
     }
 
     let moduloAtual: string | null = pathname === "/" ? "dashboard" : null
