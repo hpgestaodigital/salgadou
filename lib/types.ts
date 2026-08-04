@@ -96,6 +96,9 @@ export type PagamentoFornecedor = {
   responsavel_nomes?: string[]
   anexo_url?: string | null
   anexo_path?: string | null
+  boleto_url?: string | null
+  boleto_path?: string | null
+  codigo_barras?: string | null
   created_at: string
 }
 
