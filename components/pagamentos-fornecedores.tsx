@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { CheckCircle2, Loader2, Pencil, Plus, RotateCcw, Search, Send } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Loader2, Pencil, Plus, RotateCcw, Search, Send, Truck, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { mensagemErroSupabase } from "@/lib/supabase/friendly-error"
@@ -22,14 +22,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Truck, AlertTriangle, Wallet } from "lucide-react"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 type Filtro = "todos" | "pendentes" | "pagos" | "vencidos"
 
@@ -42,6 +35,9 @@ const vazio = {
   responsavel: "",
   anexo_url: "",
   anexo_path: "",
+  boleto_url: "",
+  boleto_path: "",
+  codigo_barras: "",
 }
 
 export function PagamentosFornecedores() {
@@ -133,6 +129,9 @@ export function PagamentosFornecedores() {
       responsavel: p.responsavel ?? "",
       anexo_url: p.anexo_url ?? "",
       anexo_path: p.anexo_path ?? "",
+      boleto_url: p.boleto_url ?? "",
+      boleto_path: p.boleto_path ?? "",
+      codigo_barras: p.codigo_barras ?? "",
     })
     setOpen(true)
   }
@@ -153,6 +152,9 @@ export function PagamentosFornecedores() {
         responsavel: form.responsavel || null,
         anexo_url: form.anexo_path ? null : form.anexo_url || null,
         anexo_path: form.anexo_path || null,
+        boleto_url: form.boleto_path ? null : form.boleto_url || null,
+        boleto_path: form.boleto_path || null,
+        codigo_barras: form.codigo_barras.trim() || null,
       }
       const result = editId
         ? await supabase.from("pagamentos_fornecedores").update(payload).eq("id", editId).select("id").single()
@@ -203,21 +205,16 @@ export function PagamentosFornecedores() {
       <PageHeader
         title="Pagamentos a Fornecedores"
         description="Controle de contas a pagar, vencimentos e baixas."
-        action={
-          <Button onClick={abrirNovo}>
-            <Plus className="size-4" />
-            Nova conta
-          </Button>
-        }
+        action={<Button onClick={abrirNovo}><Plus className="size-4" />Nova conta</Button>}
       />
 
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="A pagar (total)" value={formatBRL(totalPendente)} icon={Truck} tone="primary" />
         <StatCard label="Vencido" value={formatBRL(totalVencido)} icon={AlertTriangle} tone="warning" />
         <StatCard label="Pago no mês" value={formatBRL(pagoMes)} icon={Wallet} tone="success" />
       </div>
 
-      <Card className="p-4 mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <Card className="mb-4 flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
         <Tabs value={filtro} onValueChange={(v) => setFiltro(v as Filtro)}>
           <TabsList>
             <TabsTrigger value="todos">Todos</TabsTrigger>
@@ -227,13 +224,8 @@ export function PagamentosFornecedores() {
           </TabsList>
         </Tabs>
         <div className="relative w-full lg:max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar fornecedor ou pedido"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="pl-9"
-          />
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Buscar fornecedor ou pedido" value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9" />
         </div>
       </Card>
 
@@ -252,172 +244,104 @@ export function PagamentosFornecedores() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                    Carregando...
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : filtrados.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                    Nenhuma conta encontrada.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtrados.map((p) => {
-                  const vencido = !p.pago_em && p.vencimento < hoje
-                  return (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-semibold">
-                        {p.fornecedor}
-                        {p.observacao && (
-                          <span className="block text-xs font-normal text-muted-foreground truncate max-w-52">
-                            {p.observacao}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{p.pedido || "—"}</TableCell>
-                      <TableCell className={vencido ? "text-destructive font-semibold" : ""}>
-                        {formatDate(p.vencimento)}
-                      </TableCell>
-                      <TableCell className="text-right font-heading font-bold">{formatBRL(p.valor)}</TableCell>
-                      <TableCell>
-                        {p.pago_em ? (
-                          <Badge className="bg-accent text-accent-foreground">Pago {formatDate(p.pago_em)}</Badge>
-                        ) : vencido ? (
-                          <Badge variant="destructive">Vencido</Badge>
-                        ) : (
-                          <Badge variant="secondary">Pendente</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => enviarLembrete(p)}
-                            disabled={enviandoId === p.id}
-                            aria-label="Enviar lembrete no WhatsApp"
-                            className="text-muted-foreground hover:text-primary"
-                          >
-                            {enviandoId === p.id ? (
-                              <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                              <Send className="size-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => alternarPago(p)}
-                            aria-label={p.pago_em ? "Reabrir" : "Marcar como pago"}
-                            className={p.pago_em ? "text-muted-foreground" : "text-accent-foreground"}
-                          >
-                            {p.pago_em ? <RotateCcw className="size-4" /> : <CheckCircle2 className="size-4" />}
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => abrirEdicao(p)} aria-label="Editar">
-                            <Pencil className="size-4" />
-                          </Button>
-                          <ConfirmDeleteButton onConfirm={() => excluir(p.id)} />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              )}
+                <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
+              ) : filtrados.map((p) => {
+                const vencido = !p.pago_em && p.vencimento < hoje
+                return (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-semibold">
+                      {p.fornecedor}
+                      {p.observacao && <span className="block max-w-52 truncate text-xs font-normal text-muted-foreground">{p.observacao}</span>}
+                      {(p.boleto_path || p.boleto_url || p.codigo_barras) && <span className="block text-xs font-normal text-muted-foreground">Boleto cadastrado</span>}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{p.pedido || "—"}</TableCell>
+                    <TableCell className={vencido ? "font-semibold text-destructive" : ""}>{formatDate(p.vencimento)}</TableCell>
+                    <TableCell className="text-right font-heading font-bold">{formatBRL(p.valor)}</TableCell>
+                    <TableCell>
+                      {p.pago_em ? <Badge className="bg-accent text-accent-foreground">Pago {formatDate(p.pago_em)}</Badge> : vencido ? <Badge variant="destructive">Vencido</Badge> : <Badge variant="secondary">Pendente</Badge>}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => enviarLembrete(p)} disabled={enviandoId === p.id} aria-label="Enviar lembrete no WhatsApp" className="text-muted-foreground hover:text-primary">
+                          {enviandoId === p.id ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => alternarPago(p)} aria-label={p.pago_em ? "Reabrir" : "Marcar como pago"} className={p.pago_em ? "text-muted-foreground" : "text-accent-foreground"}>
+                          {p.pago_em ? <RotateCcw className="size-4" /> : <CheckCircle2 className="size-4" />}
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => abrirEdicao(p)} aria-label="Editar"><Pencil className="size-4" /></Button>
+                        <ConfirmDeleteButton onConfirm={() => excluir(p.id)} />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </div>
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editId ? "Editar conta" : "Nova conta a pagar"}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          <DialogHeader><DialogTitle>{editId ? "Editar conta" : "Nova conta a pagar"}</DialogTitle></DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5 sm:col-span-2">
               <Label htmlFor="fornecedor">Fornecedor</Label>
-              <Input
-                id="fornecedor"
-                list="lista-fornecedores"
-                value={form.fornecedor}
-                onChange={(e) => setForm({ ...form, fornecedor: e.target.value })}
-                placeholder="Nome do fornecedor"
-              />
-              <datalist id="lista-fornecedores">
-                {fornecedores.map((f) => (
-                  <option key={f.id} value={f.nome} />
-                ))}
-              </datalist>
+              <Input id="fornecedor" list="lista-fornecedores" value={form.fornecedor} onChange={(e) => setForm({ ...form, fornecedor: e.target.value })} placeholder="Nome do fornecedor" />
+              <datalist id="lista-fornecedores">{fornecedores.map((f) => <option key={f.id} value={f.nome} />)}</datalist>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="pedido">Nº do pedido</Label>
-              <Input
-                id="pedido"
-                value={form.pedido}
-                onChange={(e) => setForm({ ...form, pedido: e.target.value })}
-                placeholder="Opcional"
-              />
+              <Input id="pedido" value={form.pedido} onChange={(e) => setForm({ ...form, pedido: e.target.value })} placeholder="Opcional" />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="valor">Valor (R$)</Label>
-              <Input
-                id="valor"
-                type="number"
-                step="0.01"
-                value={form.valor}
-                onChange={(e) => setForm({ ...form, valor: e.target.value })}
-                placeholder="0,00"
-              />
+              <Input id="valor" type="number" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="0,00" />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="vencimento">Vencimento</Label>
-              <Input
-                id="vencimento"
-                type="date"
-                value={form.vencimento}
-                onChange={(e) => setForm({ ...form, vencimento: e.target.value })}
-              />
+              <Input id="vencimento" type="date" value={form.vencimento} onChange={(e) => setForm({ ...form, vencimento: e.target.value })} />
             </div>
             <div className="grid gap-1.5">
               <Label>Responsável pelo pagamento</Label>
-              <Select
-                value={form.responsavel || "sem_responsavel"}
-                onValueChange={(nome) => setForm({ ...form, responsavel: nome === "sem_responsavel" ? "" : nome ?? "" })}
-              >
+              <Select value={form.responsavel || "sem_responsavel"} onValueChange={(nome) => setForm({ ...form, responsavel: nome === "sem_responsavel" ? "" : nome ?? "" })}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="sem_responsavel">Não definido (avisar sócios)</SelectItem>
-                  {pessoas.filter((p) => p.ativo).map((p) => (
-                    <SelectItem key={p.id} value={p.nome}>{p.nome}</SelectItem>
-                  ))}
+                  {pessoas.filter((p) => p.ativo).map((p) => <SelectItem key={p.id} value={p.nome}>{p.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-1.5 sm:col-span-2">
+              <Label htmlFor="codigo-barras">Código de barras do boleto (opcional)</Label>
+              <Textarea id="codigo-barras" value={form.codigo_barras} onChange={(e) => setForm({ ...form, codigo_barras: e.target.value })} rows={3} placeholder="Cole a linha digitável ou o código de barras" className="font-mono text-xs" />
+            </div>
+            <PaymentAttachmentField
+              url={form.boleto_url}
+              path={form.boleto_path}
+              onChange={(boleto) => setForm({ ...form, boleto_url: boleto.url, boleto_path: boleto.path })}
+              label="Boleto para pagamento (opcional)"
+              helper="PDF, JPG, PNG ou WebP · máximo 5 MB."
+              previewAlt="Prévia do boleto"
+              storageFolder="boletos"
+              allowPdf
+            />
+            <div className="grid gap-1.5 sm:col-span-2">
               <Label htmlFor="obs">Observação</Label>
-              <Textarea
-                id="obs"
-                value={form.observacao}
-                onChange={(e) => setForm({ ...form, observacao: e.target.value })}
-                rows={2}
-              />
+              <Textarea id="obs" value={form.observacao} onChange={(e) => setForm({ ...form, observacao: e.target.value })} rows={2} />
             </div>
             <PaymentAttachmentField
               url={form.anexo_url}
               path={form.anexo_path}
               onChange={(anexo) => setForm({ ...form, anexo_url: anexo.url, anexo_path: anexo.path })}
+              label="Comprovante do pagamento (opcional)"
+              storageFolder="comprovantes-fornecedores"
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={salvar} disabled={saving}>
-              {saving && <Loader2 className="size-4 animate-spin" />}
-              Salvar
-            </Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button onClick={salvar} disabled={saving}>{saving && <Loader2 className="size-4 animate-spin" />}Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
