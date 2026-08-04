@@ -9,16 +9,20 @@ import type { Colaborador, Escala } from "@/lib/types"
 import { DIAS } from "@/lib/types"
 import { addDaysISO, formatDate, mondayOf, todayISO, weekLabel } from "@/lib/format"
 import { PageHeader } from "@/components/page-header"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { getPapel } from "@/lib/auth-roles"
 
 type Draft = Record<string, Partial<Escala>>
 
+const DIAS_ESCALA = DIAS.filter((dia) => dia.key !== "seg")
+
 function calcularMinutos(valor: string) {
   const texto = valor.trim()
   if (!texto || /^(folga|off|—|-)$/i.test(texto)) return { minutos: 0, invalidos: 0 }
+
   const intervalos = [...texto.matchAll(/(\d{1,2}):(\d{2})\s*[-–—]\s*(\d{1,2}):(\d{2})/g)]
   if (intervalos.length === 0) return { minutos: 0, invalidos: 1 }
 
@@ -31,6 +35,7 @@ function calcularMinutos(valor: string) {
       const valido = inicioHora <= 23 && fimHora <= 23 && inicioMinuto <= 59 && fimMinuto <= 59
       const inicio = inicioHora * 60 + inicioMinuto
       const fim = fimHora * 60 + fimMinuto
+
       if (!valido || fim <= inicio) total.invalidos += 1
       else total.minutos += fim - inicio
       return total
@@ -42,7 +47,7 @@ function calcularMinutos(valor: string) {
 function formatarTotalSemanal(minutos: number) {
   const horas = Math.floor(minutos / 60)
   const resto = minutos % 60
-  return `${horas} h${resto ? ` ${resto} min` : ""}`
+  return `${horas} h${resto ? ` ${resto} min` : ""} na semana`
 }
 
 export function EscalaView() {
@@ -53,7 +58,10 @@ export function EscalaView() {
   const [podeEditar, setPodeEditar] = useState(false)
   const { data: colaboradores, isLoading } = useTable<Colaborador>("colaboradores", { column: "nome" })
   const { data: escalas, mutate } = useTable<Escala>("escala")
-  const ativos = useMemo(() => colaboradores.filter((c) => c.ativo && c.participa_escala !== false), [colaboradores])
+  const ativos = useMemo(
+    () => colaboradores.filter((colaborador) => colaborador.ativo && colaborador.participa_escala !== false),
+    [colaboradores],
+  )
 
   useEffect(() => {
     let ativo = true
@@ -68,7 +76,9 @@ export function EscalaView() {
 
   const escalaDaSemana = useMemo(() => {
     const mapa = new Map<string, Escala>()
-    escalas.filter((item) => item.semana_inicio === semana).forEach((item) => mapa.set(item.colaborador_id, item))
+    escalas
+      .filter((item) => item.semana_inicio === semana)
+      .forEach((item) => mapa.set(item.colaborador_id, item))
     return mapa
   }, [escalas, semana])
 
@@ -80,11 +90,14 @@ export function EscalaView() {
 
   function setValue(colaboradorId: string, dia: string, valor: string) {
     if (!podeEditar) return
-    setDraft((atual) => ({ ...atual, [colaboradorId]: { ...atual[colaboradorId], [dia]: valor } }))
+    setDraft((atual) => ({
+      ...atual,
+      [colaboradorId]: { ...atual[colaboradorId], [dia]: valor },
+    }))
   }
 
   function totalDaSemana(colaboradorId: string) {
-    return DIAS.reduce(
+    return DIAS_ESCALA.reduce(
       (total, dia) => {
         const calculado = calcularMinutos(getValue(colaboradorId, dia.key))
         total.minutos += calculado.minutos
@@ -97,6 +110,7 @@ export function EscalaView() {
 
   async function salvar() {
     if (!podeEditar) return toast.error("Somente administradores e sócios podem alterar a escala.")
+
     const rows = ativos
       .filter((colaborador) => draft[colaborador.id])
       .map((colaborador) => {
@@ -115,8 +129,11 @@ export function EscalaView() {
 
     if (!rows.length) return
     setSaving(true)
-    const { error } = await supabase.from("escala").upsert(rows, { onConflict: "semana_inicio,colaborador_id" })
+    const { error } = await supabase.from("escala").upsert(rows, {
+      onConflict: "semana_inicio,colaborador_id",
+    })
     setSaving(false)
+
     if (error) return toast.error("Não foi possível salvar a escala.")
     setDraft({})
     await mutate()
@@ -133,7 +150,7 @@ export function EscalaView() {
     <div>
       <PageHeader
         title="Escala Semanal"
-        description="Área de gestão exclusiva de administradores e sócios. Cada pessoa ocupa duas linhas visuais, sem rolagem horizontal."
+        description="Defina os horários da equipe de terça a domingo. A edição é exclusiva de administradores e sócios."
         action={
           <Button onClick={salvar} disabled={!podeEditar || !Object.keys(draft).length || saving}>
             {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
@@ -145,85 +162,94 @@ export function EscalaView() {
       <Card className="mb-5">
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => mudarSemana(-7)} aria-label="Semana anterior"><ChevronLeft className="size-4" /></Button>
+            <Button variant="outline" size="icon" onClick={() => mudarSemana(-7)} aria-label="Semana anterior">
+              <ChevronLeft className="size-4" />
+            </Button>
             <div className="min-w-56 text-center">
               <p className="text-xs text-muted-foreground">Semana</p>
               <p className="font-heading font-bold">{weekLabel(semana)}</p>
             </div>
-            <Button variant="outline" size="icon" onClick={() => mudarSemana(7)} aria-label="Próxima semana"><ChevronRight className="size-4" /></Button>
+            <Button variant="outline" size="icon" onClick={() => mudarSemana(7)} aria-label="Próxima semana">
+              <ChevronRight className="size-4" />
+            </Button>
           </div>
           <Button variant="ghost" size="sm" onClick={() => mudarSemana(0)}>Ir para semana atual</Button>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4">
-        {isLoading ? (
-          <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Carregando escala...</CardContent></Card>
-        ) : ativos.length === 0 ? (
-          <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Nenhuma pessoa participa da Escala Semanal.</CardContent></Card>
-        ) : ativos.map((colaborador) => {
-          const total = totalDaSemana(colaborador.id)
-          return (
-            <Card key={colaborador.id}>
-              <CardHeader className="pb-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-base">{colaborador.nome}</CardTitle>
-                    {colaborador.funcao && <p className="mt-1 text-xs text-muted-foreground">{colaborador.funcao}</p>}
-                  </div>
-                  <div className="text-right">
-                    <p className="font-heading font-bold text-primary">{formatarTotalSemanal(total.minutos)}</p>
-                    {total.invalidos > 0 && <p className="text-xs text-destructive">{total.invalidos} intervalo(s) inválido(s)</p>}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                <DayRow dias={DIAS.slice(0, 4)} semana={semana} colaborador={colaborador} getValue={getValue} setValue={setValue} podeEditar={podeEditar} />
-                <DayRow dias={DIAS.slice(4)} semana={semana} colaborador={colaborador} getValue={getValue} setValue={setValue} podeEditar={podeEditar} />
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+      <Card className="overflow-hidden p-0">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="sticky left-0 z-10 min-w-44 bg-muted/50">Colaborador</TableHead>
+                {DIAS_ESCALA.map((dia) => {
+                  const indice = DIAS.findIndex((item) => item.key === dia.key)
+                  return (
+                    <TableHead key={dia.key} className="min-w-52 text-center">
+                      <span className="block font-bold">{dia.label}</span>
+                      <span className="block text-[11px] font-normal text-muted-foreground">
+                        {formatDate(addDaysISO(semana, indice)).slice(0, 5)}
+                      </span>
+                    </TableHead>
+                  )
+                })}
+                <TableHead className="min-w-40 text-right">Total semanal</TableHead>
+              </TableRow>
+            </TableHeader>
 
-function DayRow({
-  dias,
-  semana,
-  colaborador,
-  getValue,
-  setValue,
-  podeEditar,
-}: {
-  dias: readonly { key: string; label: string }[]
-  semana: string
-  colaborador: Colaborador
-  getValue: (id: string, dia: string) => string
-  setValue: (id: string, dia: string, valor: string) => void
-  podeEditar: boolean
-}) {
-  return (
-    <div className={`grid gap-3 ${dias.length === 4 ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
-      {dias.map((dia) => {
-        const indice = DIAS.findIndex((item) => item.key === dia.key)
-        return (
-          <div key={dia.key} className="grid min-w-0 gap-1.5 rounded-xl border bg-muted/15 p-3">
-            <label htmlFor={`${colaborador.id}-${dia.key}`} className="text-center text-xs font-bold uppercase tracking-wide text-muted-foreground">
-              {dia.label} · {formatDate(addDaysISO(semana, indice)).slice(0, 5)}
-            </label>
-            <Input
-              id={`${colaborador.id}-${dia.key}`}
-              value={getValue(colaborador.id, dia.key)}
-              onChange={(event) => setValue(colaborador.id, dia.key, event.target.value)}
-              readOnly={!podeEditar}
-              placeholder="08:00–13:00 / 18:00–22:00"
-              className="h-auto min-h-11 text-center text-xs"
-            />
-          </div>
-        )
-      })}
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">Carregando...</TableCell>
+                </TableRow>
+              ) : ativos.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                    Nenhuma pessoa participa da Escala Semanal.
+                  </TableCell>
+                </TableRow>
+              ) : ativos.map((colaborador) => {
+                const total = totalDaSemana(colaborador.id)
+                return (
+                  <TableRow key={colaborador.id}>
+                    <TableCell className="sticky left-0 z-10 bg-card font-semibold">
+                      <span className="block max-w-40 truncate">{colaborador.nome}</span>
+                      {colaborador.funcao && (
+                        <span className="block text-xs font-normal text-muted-foreground">{colaborador.funcao}</span>
+                      )}
+                    </TableCell>
+
+                    {DIAS_ESCALA.map((dia) => (
+                      <TableCell key={dia.key} className="p-1">
+                        <Input
+                          value={getValue(colaborador.id, dia.key)}
+                          onChange={(event) => setValue(colaborador.id, dia.key, event.target.value)}
+                          readOnly={!podeEditar}
+                          placeholder="08:00–13:00 / 18:00–22:00"
+                          className="h-9 text-center text-xs"
+                          aria-label={`${colaborador.nome}, ${dia.label}: intervalos de horário`}
+                        />
+                      </TableCell>
+                    ))}
+
+                    <TableCell className="text-right">
+                      <span className="block whitespace-nowrap font-heading font-bold text-primary">
+                        {formatarTotalSemanal(total.minutos)}
+                      </span>
+                      {total.invalidos > 0 && (
+                        <span className="mt-1 block text-xs text-destructive">
+                          {total.invalidos} intervalo(s) inválido(s)
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
     </div>
   )
 }
