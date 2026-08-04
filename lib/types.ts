@@ -1,7 +1,19 @@
+export type PixTipo = "cpf" | "celular" | "email" | "cnpj" | "aleatoria"
+
+export const TIPOS_CHAVE_PIX: { value: PixTipo; label: string }[] = [
+  { value: "cpf", label: "CPF" },
+  { value: "celular", label: "Número de celular" },
+  { value: "email", label: "E-mail" },
+  { value: "cnpj", label: "CNPJ" },
+  { value: "aleatoria", label: "Chave aleatória" },
+]
+
 export type Colaborador = {
   id: string
   nome: string
   whatsapp: string | null
+  pix?: string | null
+  pix_tipo?: PixTipo | null
   tipo: string | null
   valor_diaria: number | null
   modalidade_pagamento?: "pro_labore" | "diaria" | "contrato" | null
@@ -37,6 +49,7 @@ export type Motoboy = {
   id: string
   nome: string
   pix: string | null
+  pix_tipo?: PixTipo | null
   whatsapp: string | null
   valor_diaria: number | null
   ativo: boolean
@@ -47,6 +60,8 @@ export type Fornecedor = {
   id: string
   nome: string
   whatsapp: string | null
+  pix?: string | null
+  pix_tipo?: PixTipo | null
   observacao: string | null
   ativo: boolean
   created_at: string
@@ -81,6 +96,9 @@ export type PagamentoFornecedor = {
   responsavel_nomes?: string[]
   anexo_url?: string | null
   anexo_path?: string | null
+  boleto_url?: string | null
+  boleto_path?: string | null
+  codigo_barras?: string | null
   created_at: string
 }
 
@@ -94,6 +112,7 @@ export type PagamentoMotoboy = {
   valor_diaria: number | null
   total: number | null
   pix: string | null
+  pix_tipo?: PixTipo | null
   pago_em: string | null
   observacao: string | null
   responsavel?: string | null
