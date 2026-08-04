@@ -4,10 +4,26 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { ADMIN_EMAIL, getPapel, type Papel } from "@/lib/auth-roles"
 
 const MODULOS = [
-  "dashboard", "dashboard_calendario_producao", "dashboard_fornecedores", "dashboard_motoboys",
-  "dashboard_equipe_ativa", "dashboard_pendencias_colaboradores", "dashboard_pendencias_socios", "escala", "kanban", "reunioes", "juridico", "financeiro", "historico",
-  "pagamentos_fornecedores", "pagamentos_motoboys", "cadastros", "usuarios",
-  "configuracoes", "producao_compras", "producao_estoque", "producao_planejamento",
+  "dashboard",
+  "dashboard_calendario_producao",
+  "dashboard_fornecedores",
+  "dashboard_motoboys",
+  "escala",
+  "kanban",
+  "reunioes",
+  "juridico",
+  "financeiro",
+  "metas",
+  "historico",
+  "pagamentos_fornecedores",
+  "pagamentos_motoboys",
+  "cadastros",
+  "usuarios",
+  "configuracoes",
+  "mercado",
+  "producao_compras",
+  "producao_estoque",
+  "producao_planejamento",
 ] as const
 
 async function exigirGestor() {
@@ -36,8 +52,7 @@ export async function GET(request: Request) {
     if (usuarioError || padraoError || individuaisError) throw usuarioError || padraoError || individuaisError
     const papel = (usuario.user.app_metadata?.role as Papel) || "colaborador"
     const base = Object.fromEntries(
-      (padrao ?? []).filter((item) => item.modulo && item.pode_visualizar !== null)
-        .map((item) => [item.modulo, item]),
+      (padrao ?? []).filter((item) => item.modulo && item.pode_visualizar !== null).map((item) => [item.modulo, item]),
     )
     const permissoes = Object.fromEntries(
       MODULOS.map((modulo) => {
@@ -45,12 +60,11 @@ export async function GET(request: Request) {
         const perfil = (padrao ?? []).find((item) => item.modulo === modulo && item.papel === papel)
         return [modulo, individual?.pode_visualizar ?? perfil?.pode_visualizar ?? false]
       }),
-    )
-    if (papel === "colaborador") {
-      permissoes.dashboard = true
-      permissoes.dashboard_calendario_producao = true
-      permissoes.escala = true
-      permissoes.kanban = true
+    ) as Record<(typeof MODULOS)[number], boolean>
+
+    if (papel !== "admin" && papel !== "socio") {
+      permissoes.escala = false
+      permissoes.kanban = false
     }
 
     return NextResponse.json({ papel, permissoes, base })
@@ -81,11 +95,13 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "O administrador padrão é protegido." }, { status: 400 })
     }
 
-    const acessosMinimos = papel === "colaborador" ? new Set(["dashboard", "dashboard_calendario_producao", "escala", "kanban"]) : new Set<string>()
     const entradas = MODULOS.map((modulo) => ({
       usuario_id: usuarioId,
       modulo,
-      pode_visualizar: acessosMinimos.has(modulo) || Boolean(permissoes?.[modulo]),
+      pode_visualizar:
+        (modulo === "escala" || modulo === "kanban") && papel !== "socio"
+          ? false
+          : Boolean(permissoes?.[modulo]),
       updated_at: new Date().toISOString(),
     }))
 
