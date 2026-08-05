@@ -126,3 +126,42 @@ do update set
   prazo = excluded.prazo,
   status = excluded.status,
   updated_at = now();
+
+-- Registra a autoria dos cards retroativos usando o organizador original da reunião.
+insert into public.auditoria_acoes (
+  tabela,
+  registro_id,
+  registro_titulo,
+  acao,
+  usuario_id,
+  usuario_nome,
+  usuario_email,
+  ocorrido_em
+)
+select
+  'kanban_tarefas',
+  tarefa.id,
+  left(tarefa.titulo, 240),
+  'criou',
+  reuniao.organizador_id,
+  coalesce(
+    nullif(usuario.raw_user_meta_data ->> 'nome', ''),
+    nullif(usuario.raw_user_meta_data ->> 'name', ''),
+    nullif(usuario.email, ''),
+    'Organizador da reunião'
+  ),
+  usuario.email,
+  reuniao.created_at
+from public.kanban_tarefas tarefa
+join public.reunioes reuniao on reuniao.id = tarefa.reuniao_id
+left join auth.users usuario on usuario.id = reuniao.organizador_id
+where reuniao.organizador_id is not null
+  and not exists (
+    select 1
+    from public.auditoria_acoes auditoria
+    where auditoria.tabela = 'kanban_tarefas'
+      and auditoria.registro_id = tarefa.id
+      and auditoria.acao = 'criou'
+  );
+
+notify pgrst, 'reload schema';
