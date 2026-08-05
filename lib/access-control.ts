@@ -76,5 +76,7 @@ export async function carregarPermissoes(user: User): Promise<Permissoes> {
     resultado.kanban = false
   }
 
+  if (papel !== "admin") resultado.usuarios = false
+
   return resultado
 }
