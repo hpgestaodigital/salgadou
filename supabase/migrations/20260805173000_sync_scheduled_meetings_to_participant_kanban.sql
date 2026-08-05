@@ -70,8 +70,7 @@ begin
       responsavel_id = excluded.responsavel_id,
       responsavel_nome = excluded.responsavel_nome,
       prazo = excluded.prazo,
-      status = excluded.status,
-      updated_at = now();
+      status = excluded.status;
   end loop;
 
   return new;
@@ -89,7 +88,6 @@ create trigger trg_remover_reuniao_do_kanban
 after delete on public.reunioes
 for each row execute function public.sincronizar_reuniao_com_kanban();
 
--- Corrige reuniões já existentes sem duplicar cards.
 insert into public.kanban_tarefas (
   titulo,
   descricao,
@@ -124,10 +122,8 @@ do update set
   responsavel_id = excluded.responsavel_id,
   responsavel_nome = excluded.responsavel_nome,
   prazo = excluded.prazo,
-  status = excluded.status,
-  updated_at = now();
+  status = excluded.status;
 
--- Registra a autoria dos cards retroativos usando o organizador original da reunião.
 insert into public.auditoria_acoes (
   tabela,
   registro_id,
