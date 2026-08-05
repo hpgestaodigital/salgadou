@@ -90,23 +90,6 @@ after delete on public.reunioes
 for each row execute function public.sincronizar_reuniao_com_kanban();
 
 -- Corrige reuniões já existentes sem duplicar cards.
-do $$
-declare
-  reuniao_atual public.reunioes%rowtype;
-begin
-  for reuniao_atual in
-    select * from public.reunioes where status in ('agendada', 'realizada')
-  loop
-    perform public.sincronizar_reuniao_com_kanban()
-    from (select reuniao_atual.*) as nova;
-  end loop;
-exception
-  when others then
-    -- O backfill é executado abaixo de forma explícita para compatibilidade entre versões do Postgres.
-    null;
-end;
-$$;
-
 insert into public.kanban_tarefas (
   titulo,
   descricao,
