@@ -10,7 +10,6 @@ import {
   TIPOS_CHAVE_PIX,
   TIPOS_COLABORADOR,
   isSocio,
-  labelValorColaborador,
   type Colaborador,
   type PixTipo,
 } from "@/lib/types"
@@ -44,6 +43,22 @@ const vazio = {
 
 function labelPix(tipo?: PixTipo | null) {
   return TIPOS_CHAVE_PIX.find((item) => item.value === tipo)?.label ?? "Tipo não informado"
+}
+
+function labelValorPeriodicidade(periodicidade?: string | null) {
+  switch (periodicidade) {
+    case "por_servico":
+      return "Valor por serviço"
+    case "semanal":
+      return "Valor semanal"
+    case "quinzenal":
+      return "Valor quinzenal"
+    case "mensal":
+      return "Valor mensal"
+    case "por_dia":
+    default:
+      return "Valor da diária"
+  }
 }
 
 export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto?: "socios" | "colaboradores" }) {
@@ -105,13 +120,21 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
         observacoes_contrato: form.observacoes || null,
         notificacoes_whatsapp: form.notificacoes_whatsapp,
       }
-      const { error } = editId
-        ? await supabase.from("colaboradores").update(payload).eq("id", editId)
-        : await supabase.from("colaboradores").insert(payload)
+      const consulta = editId
+        ? supabase.from("colaboradores").update(payload).eq("id", editId)
+        : supabase.from("colaboradores").insert(payload)
+      const { data: salvo, error } = await consulta
+        .select("id, pix, pix_tipo, periodicidade_pagamento, valor_pagamento")
+        .single()
       if (error) throw error
+      if (!salvo?.id) throw new Error("O banco não confirmou a atualização do cadastro.")
+      if (form.pix && salvo.pix_tipo !== form.pix_tipo) throw new Error("O tipo da chave PIX não foi persistido.")
+      if (!socio && salvo.periodicidade_pagamento !== form.periodicidade) {
+        throw new Error("A periodicidade do pagamento não foi persistida.")
+      }
+      await mutate()
       toast.success(editId ? "Cadastro atualizado." : `${socio ? "Sócio" : "Colaborador"} cadastrado.`)
       setOpen(false)
-      mutate()
     } catch (error) {
       console.error(error)
       toast.error(mensagemErroSupabase(error))
@@ -170,8 +193,8 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
                     {c.pix && <span className="block text-xs text-muted-foreground">{labelPix(c.pix_tipo)}</span>}
                   </TableCell>
                   <TableCell className="text-right">
-                    <span className="block">{formatBRL(c.valor_diaria)}</span>
-                    {!socio && <span className="text-xs text-muted-foreground">{labelValorColaborador(c.tipo)}</span>}
+                    <span className="block">{formatBRL(c.valor_pagamento ?? c.valor_diaria)}</span>
+                    {!socio && <span className="text-xs text-muted-foreground">{labelValorPeriodicidade(c.periodicidade_pagamento)}</span>}
                   </TableCell>
                   <TableCell><Badge variant={c.ativo ? "default" : "secondary"}>{c.ativo ? "Ativo" : "Inativo"}</Badge></TableCell>
                   <TableCell>
@@ -254,7 +277,7 @@ export function CadastroColaboradores({ contexto = "colaboradores" }: { contexto
               </>
             )}
             <div className="grid gap-1.5 sm:col-span-2">
-              <Label htmlFor={`${contexto}-valor`}>{socio ? "Pró-labore (R$)" : `${labelValorColaborador(form.tipo)} (R$)`}</Label>
+              <Label htmlFor={`${contexto}-valor`}>{socio ? "Pró-labore (R$)" : `${labelValorPeriodicidade(form.periodicidade)} (R$)`}</Label>
               <Input id={`${contexto}-valor`} type="number" min="0" step="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="0,00" />
             </div>
             <div className="grid gap-1.5 sm:col-span-2">
