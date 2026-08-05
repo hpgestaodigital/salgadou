@@ -7,7 +7,6 @@ import { createClient } from "@/lib/supabase/client"
 import { mensagemErroSupabase } from "@/lib/supabase/friendly-error"
 import { useTable } from "@/lib/use-data"
 import { TIPOS_CHAVE_PIX, type Motoboy, type PixTipo } from "@/lib/types"
-import { formatBRL } from "@/lib/format"
 import { ConfirmDeleteButton } from "@/components/confirm-button"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-const vazio = { nome: "", pix: "", pix_tipo: "" as PixTipo | "", whatsapp: "", valor_diaria: "", ativo: true }
+const vazio = { nome: "", pix: "", pix_tipo: "" as PixTipo | "", whatsapp: "", ativo: true }
 
 function labelPix(tipo?: PixTipo | null) {
   return TIPOS_CHAVE_PIX.find((item) => item.value === tipo)?.label ?? "Tipo não informado"
@@ -57,7 +56,6 @@ export function CadastroMotoboys() {
       pix: m.pix ?? "",
       pix_tipo: m.pix_tipo ?? inferirTipoPix(m.pix),
       whatsapp: m.whatsapp ?? "",
-      valor_diaria: String(m.valor_diaria ?? ""),
       ativo: m.ativo,
     })
     setOpen(true)
@@ -84,7 +82,6 @@ export function CadastroMotoboys() {
         pix: pix || null,
         pix_tipo: pix ? pixTipo || null : null,
         whatsapp: form.whatsapp.trim() || null,
-        valor_diaria: Number(form.valor_diaria) || 0,
         ativo: form.ativo,
       }
 
@@ -120,8 +117,11 @@ export function CadastroMotoboys() {
 
   return (
     <div>
-      <div className="flex justify-end mb-4">
-        <Button onClick={abrirNovo}>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          A diária varia por lançamento e deve ser informada na tela de pagamentos.
+        </p>
+        <Button onClick={abrirNovo} className="shrink-0">
           <Plus className="size-4" />
           Novo motoboy
         </Button>
@@ -135,7 +135,6 @@ export function CadastroMotoboys() {
                 <TableHead>Nome</TableHead>
                 <TableHead>Chave PIX</TableHead>
                 <TableHead>WhatsApp</TableHead>
-                <TableHead className="text-right">Diária</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -143,11 +142,11 @@ export function CadastroMotoboys() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Carregando...</TableCell>
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Carregando...</TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Nenhum motoboy cadastrado.</TableCell>
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Nenhum motoboy cadastrado.</TableCell>
                 </TableRow>
               ) : (
                 data.map((m) => {
@@ -160,7 +159,6 @@ export function CadastroMotoboys() {
                         {m.pix && <span className="block text-xs text-muted-foreground">{labelPix(tipoPix || null)}</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{m.whatsapp || "—"}</TableCell>
-                      <TableCell className="text-right">{formatBRL(m.valor_diaria)}</TableCell>
                       <TableCell>
                         {m.ativo ? <Badge className="bg-accent text-accent-foreground">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge>}
                       </TableCell>
@@ -201,13 +199,9 @@ export function CadastroMotoboys() {
               <Label htmlFor="pix">Chave PIX</Label>
               <Input id="pix" value={form.pix} onChange={(e) => setForm({ ...form, pix: e.target.value })} placeholder="Digite a chave" />
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid gap-1.5 sm:col-span-2">
               <Label htmlFor="wppM">WhatsApp</Label>
               <Input id="wppM" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="(00) 00000-0000" />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="diariaM">Valor da diária (R$)</Label>
-              <Input id="diariaM" type="number" step="0.01" value={form.valor_diaria} onChange={(e) => setForm({ ...form, valor_diaria: e.target.value })} />
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3 sm:col-span-2">
               <Label htmlFor="ativoM">Motoboy ativo</Label>
