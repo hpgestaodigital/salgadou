@@ -143,16 +143,15 @@ export function PagamentosMotoboys() {
   }
 
   function selecionarMotoboy(id: string) {
-    const motoboy = motoboys.find((item) => item.id === id)
     setForm((atual) => ({
       ...atual,
       motoboy_id: id,
-      valor_diaria: atual.valor_diaria || (motoboy?.valor_diaria ? String(motoboy.valor_diaria) : ""),
     }))
   }
 
   async function salvar() {
     if (!form.motoboy_id) return toast.error("Selecione o motoboy.")
+    if (form.valor_diaria.trim() === "") return toast.error("Informe a diária deste dia.")
     setSaving(true)
     try {
       const motoboy = motoboys.find((item) => item.id === form.motoboy_id)
@@ -233,7 +232,7 @@ export function PagamentosMotoboys() {
     <div>
       <PageHeader
         title="Pagamentos de Motoboys"
-        description="Registre o total de comissões, a diária e os dados de pagamento de cada motoboy."
+        description="Registre o total de comissões, a diária daquele dia e os dados de pagamento de cada motoboy."
         action={<Button onClick={abrirNovo}><Plus className="size-4" />Novo pagamento</Button>}
       />
 
@@ -364,8 +363,9 @@ export function PagamentosMotoboys() {
               <Input id="taxa" type="number" min="0" step="0.01" value={form.valor_taxas} onChange={(event) => setForm({ ...form, valor_taxas: event.target.value })} placeholder="0,00" />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="diaria">Diária (R$)</Label>
+              <Label htmlFor="diaria">Diária deste dia (R$)</Label>
               <Input id="diaria" type="number" min="0" step="0.01" value={form.valor_diaria} onChange={(event) => setForm({ ...form, valor_diaria: event.target.value })} placeholder="0,00" />
+              <p className="text-xs text-muted-foreground">Informe o valor combinado especificamente para este dia.</p>
             </div>
 
             <div className="grid gap-3 rounded-lg border p-4 sm:col-span-2">
