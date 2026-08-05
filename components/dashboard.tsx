@@ -24,7 +24,15 @@ import { DashboardProductionCalendar } from "@/components/dashboard-production-c
 import { DashboardWeeklyScale } from "@/components/dashboard-weekly-agenda"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 type ResumoDashboard = {
   producao_planejada: number
@@ -71,6 +79,7 @@ export function Dashboard() {
   const [resumo, setResumo] = useState<ResumoDashboard>(RESUMO_VAZIO)
   const [meuTrabalho, setMeuTrabalho] = useState<ItemTrabalho[]>([])
   const [loading, setLoading] = useState(true)
+  const [financeiroAberto, setFinanceiroAberto] = useState(false)
   const semanaInicio = mondayOf(todayISO())
 
   useEffect(() => {
@@ -115,12 +124,6 @@ export function Dashboard() {
   const totalFinanceiro =
     (mostrarFornecedores ? Number(resumo.fornecedores_pendentes) : 0) +
     (mostrarMotoboys ? Number(resumo.motoboys_pendentes) : 0)
-  const hrefFinanceiro =
-    mostrarFornecedores && podeAbrirFornecedores
-      ? "/pagamentos-fornecedores"
-      : mostrarMotoboys && podeAbrirMotoboys
-        ? "/pagamentos-motoboys"
-        : undefined
   const atrasados = useMemo(
     () => meuTrabalho.filter((item) => item.prazo && item.prazo < todayISO()).length,
     [meuTrabalho],
@@ -160,7 +163,7 @@ export function Dashboard() {
             title="Resumo financeiro"
             value={formatBRL(valorFinanceiro)}
             detail={`${totalFinanceiro} pagamento(s) pendente(s)`}
-            href={hrefFinanceiro}
+            onClick={() => setFinanceiroAberto(true)}
           />
         )}
         {mostrarProducao && (
@@ -213,6 +216,37 @@ export function Dashboard() {
           )}
         </section>
       )}
+
+      <Dialog open={financeiroAberto} onOpenChange={setFinanceiroAberto}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Pendências financeiras</DialogTitle>
+            <DialogDescription>
+              Escolha o tipo de pagamento que deseja consultar ou pagar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            {mostrarFornecedores && (
+              <FinancialDialogCard
+                icon={Truck}
+                title="Fornecedores"
+                value={Number(resumo.fornecedores_valor)}
+                count={Number(resumo.fornecedores_pendentes)}
+                href={podeAbrirFornecedores ? "/pagamentos-fornecedores" : undefined}
+              />
+            )}
+            {mostrarMotoboys && (
+              <FinancialDialogCard
+                icon={Bike}
+                title="Motoboys"
+                value={Number(resumo.motoboys_valor)}
+                count={Number(resumo.motoboys_pendentes)}
+                href={podeAbrirMotoboys ? "/pagamentos-motoboys" : undefined}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -223,6 +257,7 @@ function OverviewCard({
   value,
   detail,
   href,
+  onClick,
   tone = "default",
 }: {
   icon: typeof ClipboardList
@@ -230,10 +265,12 @@ function OverviewCard({
   value: string
   detail: string
   href?: string
+  onClick?: () => void
   tone?: "default" | "warning"
 }) {
+  const interactive = Boolean(href || onClick)
   const content = (
-    <Card className={`h-full transition-colors ${href ? "hover:border-primary/50" : ""}`}>
+    <Card className={`h-full transition-colors ${interactive ? "hover:border-primary/50" : ""}`}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">{title}</CardTitle>
@@ -246,7 +283,9 @@ function OverviewCard({
       </CardContent>
     </Card>
   )
-  return href ? <Link href={href}>{content}</Link> : content
+  if (href) return <Link href={href}>{content}</Link>
+  if (onClick) return <button type="button" onClick={onClick} className="w-full text-left">{content}</button>
+  return content
 }
 
 function MyWorkCard({ itens, loading }: { itens: ItemTrabalho[]; loading: boolean }) {
@@ -322,4 +361,43 @@ function FinancialCard({
     </Card>
   )
   return href ? <Link href={href}>{content}</Link> : content
+}
+
+function FinancialDialogCard({
+  icon: Icon,
+  title,
+  value,
+  count,
+  href,
+}: {
+  icon: typeof Truck
+  title: string
+  value: number
+  count: number
+  href?: string
+}) {
+  const card = (
+    <Card className={`h-full border-2 transition-colors ${href ? "hover:border-primary" : "opacity-75"}`}>
+      <CardContent className="flex h-full flex-col p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+            <p className="mt-3 font-heading text-3xl font-extrabold">{formatBRL(value)}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{count} pagamento(s) pendente(s)</p>
+          </div>
+          <Icon className="size-10 text-primary" />
+        </div>
+        <div className="mt-6">
+          {href ? (
+            <Button className="w-full" asChild>
+              <span>Abrir pagamentos de {title.toLowerCase()}</span>
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">Você possui acesso apenas ao resumo desta categoria.</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+  return href ? <Link href={href}>{card}</Link> : card
 }
