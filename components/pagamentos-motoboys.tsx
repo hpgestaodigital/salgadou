@@ -69,6 +69,11 @@ function labelPix(tipo?: PixTipo | null) {
   return TIPOS_CHAVE_PIX.find((item) => item.value === tipo)?.label ?? "Tipo não informado"
 }
 
+function labelMes(mes: string) {
+  const [ano, numeroMes] = mes.split("-").map(Number)
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(ano, numeroMes - 1, 1))
+}
+
 export function PagamentosMotoboys() {
   const supabase = createClient()
   const { data, isLoading, mutate } = useTable<PagamentoMotoboy>("pagamentos_motoboys", { column: "data", ascending: false })
@@ -78,6 +83,7 @@ export function PagamentosMotoboys() {
   const { data: colaboradores } = useTable<Colaborador>("colaboradores", { column: "nome" })
 
   const [filtro, setFiltro] = useState<Filtro>("todos")
+  const [periodo, setPeriodo] = useState(todayISO().slice(0, 7))
   const [busca, setBusca] = useState("")
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -85,8 +91,15 @@ export function PagamentosMotoboys() {
   const [entregasForm, setEntregasForm] = useState<EntregaDraft[]>([])
   const [saving, setSaving] = useState(false)
 
-  const hoje = todayISO()
   const ativos = useMemo(() => motoboys.filter((m) => m.ativo), [motoboys])
+  const mesesDisponiveis = useMemo(
+    () => Array.from(new Set(data.map((p) => p.data.slice(0, 7)))).sort((a, b) => b.localeCompare(a)),
+    [data],
+  )
+  const dadosPeriodo = useMemo(
+    () => periodo === "total" ? data : data.filter((p) => p.data.slice(0, 7) === periodo),
+    [data, periodo],
+  )
 
   const total = useMemo(() => {
     const comissoes = Number(form.valor_taxas) || 0
@@ -94,16 +107,17 @@ export function PagamentosMotoboys() {
     return comissoes + diaria
   }, [form.valor_diaria, form.valor_taxas])
 
-  const filtrados = useMemo(() => data.filter((p) => {
+  const filtrados = useMemo(() => dadosPeriodo.filter((p) => {
     const matchBusca = !busca || (p.motoboy_nome ?? "").toLowerCase().includes(busca.toLowerCase())
     const matchFiltro = filtro === "todos" || (filtro === "pendentes" && !p.pago_em) || (filtro === "pagos" && !!p.pago_em)
     return matchBusca && matchFiltro
-  }), [data, busca, filtro])
+  }), [dadosPeriodo, busca, filtro])
 
   const totalFiltrado = useMemo(() => filtrados.reduce((soma, pagamento) => soma + Number(pagamento.total ?? 0), 0), [filtrados])
-  const totalPendente = data.filter((p) => !p.pago_em).reduce((s, p) => s + Number(p.total ?? 0), 0)
-  const pagoMes = data.filter((p) => p.pago_em && p.pago_em.slice(0, 7) === hoje.slice(0, 7)).reduce((s, p) => s + Number(p.total ?? 0), 0)
-  const entregasMes = data.filter((p) => p.data.slice(0, 7) === hoje.slice(0, 7)).reduce((s, p) => s + Number(p.numero_entregas ?? 0), 0)
+  const totalPendente = dadosPeriodo.filter((p) => !p.pago_em).reduce((s, p) => s + Number(p.total ?? 0), 0)
+  const totalPago = dadosPeriodo.filter((p) => p.pago_em).reduce((s, p) => s + Number(p.total ?? 0), 0)
+  const entregasPeriodo = dadosPeriodo.reduce((s, p) => s + Number(p.numero_entregas ?? 0), 0)
+  const periodoLabel = periodo === "total" ? "todos os períodos" : labelMes(periodo)
 
   function motoboyDoPagamento(p: PagamentoMotoboy) {
     return motoboys.find((motoboy) => motoboy.id === p.motoboy_id)
@@ -143,10 +157,7 @@ export function PagamentosMotoboys() {
   }
 
   function selecionarMotoboy(id: string) {
-    setForm((atual) => ({
-      ...atual,
-      motoboy_id: id,
-    }))
+    setForm((atual) => ({ ...atual, motoboy_id: id }))
   }
 
   async function salvar() {
@@ -237,20 +248,29 @@ export function PagamentosMotoboys() {
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="A pagar (total)" value={formatBRL(totalPendente)} icon={Bike} tone="warning" />
-        <StatCard label="Pago no mês" value={formatBRL(pagoMes)} icon={Wallet} tone="success" />
-        <StatCard label="Entregas no mês" value={`${entregasMes}`} icon={Package} tone="primary" />
+        <StatCard label={`A pagar · ${periodoLabel}`} value={formatBRL(totalPendente)} icon={Bike} tone="warning" />
+        <StatCard label={`Pago · ${periodoLabel}`} value={formatBRL(totalPago)} icon={Wallet} tone="success" />
+        <StatCard label={`Entregas · ${periodoLabel}`} value={`${entregasPeriodo}`} icon={Package} tone="primary" />
       </div>
 
-      <Card className="mb-4 flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
-        <Tabs value={filtro} onValueChange={(value) => setFiltro(value as Filtro)}>
-          <TabsList>
-            <TabsTrigger value="todos">Todos</TabsTrigger>
-            <TabsTrigger value="pendentes">Pendentes</TabsTrigger>
-            <TabsTrigger value="pagos">Pagos</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="relative w-full lg:max-w-xs">
+      <Card className="mb-4 flex flex-col gap-3 p-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <Tabs value={filtro} onValueChange={(value) => setFiltro(value as Filtro)}>
+            <TabsList>
+              <TabsTrigger value="todos">Todos</TabsTrigger>
+              <TabsTrigger value="pendentes">Pendentes</TabsTrigger>
+              <TabsTrigger value="pagos">Pagos</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Select value={periodo} onValueChange={(value) => value && setPeriodo(value)}>
+            <SelectTrigger className="w-full lg:w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="total">Todos os períodos</SelectItem>
+              {mesesDisponiveis.map((mes) => <SelectItem key={mes} value={mes}>{labelMes(mes)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="relative w-full xl:max-w-xs">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Buscar motoboy" value={busca} onChange={(event) => setBusca(event.target.value)} className="pl-9" />
         </div>
