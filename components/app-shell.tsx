@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import {
   Bike,
+  BookOpenCheck,
   BookOpenText,
   Bug,
   CalendarDays,
@@ -60,6 +61,7 @@ const NAV: NavItem[] = [
   { href: "/pagamentos-fornecedores", label: "Pagto. Fornecedores", icon: Truck, modulo: "pagamentos_fornecedores" },
   { href: "/pagamentos-motoboys", label: "Pagto. Motoboys", icon: Bike, modulo: "pagamentos_motoboys" },
   { href: "/cadastros", label: "Cadastros", icon: Users, modulo: "cadastros" },
+  { href: "/como-usar", label: "Como usar", icon: BookOpenCheck, modulo: "todos" },
   { href: "/reportar-problema", label: "Reportar problema", icon: Bug, modulo: "todos" },
   { href: "/usuarios", label: "Usuários", icon: ShieldCheck, modulo: "usuarios" },
   { href: "/configuracoes", label: "Configurações", icon: Settings, modulo: "configuracoes" },
