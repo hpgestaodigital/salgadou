@@ -24,7 +24,6 @@ import { DashboardProductionCalendar } from "@/components/dashboard-production-c
 import { DashboardWeeklyScale } from "@/components/dashboard-weekly-agenda"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
@@ -81,6 +80,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [financeiroAberto, setFinanceiroAberto] = useState(false)
   const semanaInicio = mondayOf(todayISO())
+  const mesAtual = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date())
 
   useEffect(() => {
     let ativo = true
@@ -162,7 +162,7 @@ export function Dashboard() {
             icon={Landmark}
             title="Resumo financeiro"
             value={formatBRL(valorFinanceiro)}
-            detail={`${totalFinanceiro} pagamento(s) pendente(s)`}
+            detail={`${totalFinanceiro} pendência(s) em ${mesAtual}`}
             onClick={() => setFinanceiroAberto(true)}
           />
         )}
@@ -220,12 +220,12 @@ export function Dashboard() {
       <Dialog open={financeiroAberto} onOpenChange={setFinanceiroAberto}>
         <DialogContent className="w-[calc(100vw-1rem)] sm:w-full sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Pendências financeiras</DialogTitle>
+            <DialogTitle>Pendências financeiras de {mesAtual}</DialogTitle>
             <DialogDescription>
               Escolha o tipo de pagamento que deseja consultar ou pagar.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {mostrarFornecedores && (
               <FinancialDialogCard
                 icon={Truck}
@@ -353,7 +353,7 @@ function FinancialCard({
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
           <p className="mt-2 font-heading text-2xl font-bold">{formatBRL(value)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{count} pagamento(s) pendente(s)</p>
+          <p className="mt-1 text-xs text-muted-foreground">{count} pendência(s) no mês</p>
           {!href && <p className="mt-1 text-xs text-muted-foreground">Resumo somente para consulta.</p>}
         </div>
         <Icon className="size-7 text-primary" />
@@ -377,29 +377,25 @@ function FinancialDialogCard({
   href?: string
 }) {
   const card = (
-    <Card className={`h-full min-w-0 border-2 transition-colors ${href ? "hover:border-primary" : "opacity-75"}`}>
+    <Card className={`h-full min-w-0 overflow-hidden border-2 transition-colors ${href ? "hover:border-primary" : "opacity-75"}`}>
       <CardContent className="flex h-full min-w-0 flex-col items-center p-5 text-center sm:p-6">
-        <div className="flex min-w-0 w-full flex-col items-center gap-3">
-          <Icon className="size-8 shrink-0 text-primary sm:size-9" />
-          <div className="min-w-0 w-full">
-            <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
-            <p className="mt-3 break-words font-heading text-2xl font-extrabold leading-tight sm:text-3xl">
-              {formatBRL(value)}
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">{count} pagamento(s) pendente(s)</p>
-          </div>
+        <Icon className="size-8 shrink-0 text-primary sm:size-9" />
+        <div className="mt-3 min-w-0 w-full">
+          <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+          <p className="mt-3 break-all font-heading text-2xl font-extrabold leading-tight sm:break-words sm:text-3xl">
+            {formatBRL(value)}
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">{count} pendência(s) no mês</p>
         </div>
-        <div className="mt-6 w-full min-w-0">
-          {href ? (
-            <Button className="h-auto min-h-10 w-full whitespace-normal px-3 py-2 text-center text-xs leading-snug sm:text-sm" asChild>
-              <span className="block w-full break-words">Abrir pagamentos de {title.toLowerCase()}</span>
-            </Button>
-          ) : (
-            <p className="text-sm text-muted-foreground">Você possui acesso apenas ao resumo desta categoria.</p>
-          )}
-        </div>
+        {href ? (
+          <span className="mt-6 inline-flex min-h-9 w-full items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">
+            Abrir
+          </span>
+        ) : (
+          <p className="mt-6 text-sm text-muted-foreground">Você possui acesso apenas ao resumo desta categoria.</p>
+        )}
       </CardContent>
     </Card>
   )
-  return href ? <Link href={href}>{card}</Link> : card
+  return href ? <Link href={href} className="block min-w-0">{card}</Link> : card
 }
