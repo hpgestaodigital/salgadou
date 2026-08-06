@@ -5,10 +5,14 @@ export function formatBRL(value: number | null | undefined): string {
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—"
-  // iso: YYYY-MM-DD
   const [y, m, d] = iso.split("T")[0].split("-")
   if (!y || !m || !d) return iso
   return `${d}/${m}/${y}`
+}
+
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—"
+  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
 }
 
 export function todayISO(): string {
@@ -16,10 +20,9 @@ export function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
-// Retorna a segunda-feira da semana de uma data (ISO)
 export function mondayOf(dateISO: string): string {
   const d = new Date(dateISO + "T12:00:00")
-  const day = d.getDay() // 0 dom ... 6 sab
+  const day = d.getDay()
   const diff = day === 0 ? -6 : 1 - day
   d.setDate(d.getDate() + diff)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
