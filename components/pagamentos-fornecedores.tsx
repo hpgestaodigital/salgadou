@@ -40,6 +40,11 @@ const vazio = {
   codigo_barras: "",
 }
 
+function labelMes(mes: string) {
+  const [ano, numeroMes] = mes.split("-").map(Number)
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(ano, numeroMes - 1, 1))
+}
+
 export function PagamentosFornecedores() {
   const supabase = createClient()
   const { data, isLoading, mutate } = useTable<PagamentoFornecedor>("pagamentos_fornecedores", {
@@ -51,6 +56,7 @@ export function PagamentosFornecedores() {
   const { data: config } = useTable<Configuracao>("configuracoes")
 
   const [filtro, setFiltro] = useState<Filtro>("todos")
+  const [periodo, setPeriodo] = useState(todayISO().slice(0, 7))
   const [busca, setBusca] = useState("")
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -87,9 +93,17 @@ export function PagamentosFornecedores() {
   }
 
   const hoje = todayISO()
+  const mesesDisponiveis = useMemo(
+    () => Array.from(new Set(data.map((p) => p.vencimento.slice(0, 7)))).sort((a, b) => b.localeCompare(a)),
+    [data],
+  )
+  const dadosPeriodo = useMemo(
+    () => periodo === "total" ? data : data.filter((p) => p.vencimento.slice(0, 7) === periodo),
+    [data, periodo],
+  )
 
   const filtrados = useMemo(() => {
-    return data.filter((p) => {
+    return dadosPeriodo.filter((p) => {
       const matchBusca =
         !busca ||
         p.fornecedor.toLowerCase().includes(busca.toLowerCase()) ||
@@ -102,15 +116,15 @@ export function PagamentosFornecedores() {
         (filtro === "vencidos" && vencido)
       return matchBusca && matchFiltro
     })
-  }, [data, busca, filtro, hoje])
+  }, [dadosPeriodo, busca, filtro, hoje])
 
-  const totalPendente = data.filter((p) => !p.pago_em).reduce((s, p) => s + (p.valor ?? 0), 0)
-  const totalVencido = data
+  const totalPendente = dadosPeriodo.filter((p) => !p.pago_em).reduce((s, p) => s + (p.valor ?? 0), 0)
+  const totalVencido = dadosPeriodo
     .filter((p) => !p.pago_em && p.vencimento < hoje)
     .reduce((s, p) => s + (p.valor ?? 0), 0)
-  const pagoMes = data
-    .filter((p) => p.pago_em && p.pago_em.slice(0, 7) === hoje.slice(0, 7))
-    .reduce((s, p) => s + (p.valor ?? 0), 0)
+  const totalPago = dadosPeriodo.filter((p) => p.pago_em).reduce((s, p) => s + (p.valor ?? 0), 0)
+  const totalFiltrado = filtrados.reduce((s, p) => s + Number(p.valor ?? 0), 0)
+  const periodoLabel = periodo === "total" ? "todos os períodos" : labelMes(periodo)
 
   function abrirNovo() {
     setEditId(null)
@@ -209,21 +223,30 @@ export function PagamentosFornecedores() {
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="A pagar (total)" value={formatBRL(totalPendente)} icon={Truck} tone="primary" />
-        <StatCard label="Vencido" value={formatBRL(totalVencido)} icon={AlertTriangle} tone="warning" />
-        <StatCard label="Pago no mês" value={formatBRL(pagoMes)} icon={Wallet} tone="success" />
+        <StatCard label={`A pagar · ${periodoLabel}`} value={formatBRL(totalPendente)} icon={Truck} tone="primary" />
+        <StatCard label={`Vencido · ${periodoLabel}`} value={formatBRL(totalVencido)} icon={AlertTriangle} tone="warning" />
+        <StatCard label={`Pago · ${periodoLabel}`} value={formatBRL(totalPago)} icon={Wallet} tone="success" />
       </div>
 
-      <Card className="mb-4 flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
-        <Tabs value={filtro} onValueChange={(v) => setFiltro(v as Filtro)}>
-          <TabsList>
-            <TabsTrigger value="todos">Todos</TabsTrigger>
-            <TabsTrigger value="pendentes">Pendentes</TabsTrigger>
-            <TabsTrigger value="vencidos">Vencidos</TabsTrigger>
-            <TabsTrigger value="pagos">Pagos</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="relative w-full lg:max-w-xs">
+      <Card className="mb-4 flex flex-col gap-3 p-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <Tabs value={filtro} onValueChange={(v) => setFiltro(v as Filtro)}>
+            <TabsList>
+              <TabsTrigger value="todos">Todos</TabsTrigger>
+              <TabsTrigger value="pendentes">Pendentes</TabsTrigger>
+              <TabsTrigger value="vencidos">Vencidos</TabsTrigger>
+              <TabsTrigger value="pagos">Pagos</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Select value={periodo} onValueChange={(value) => value && setPeriodo(value)}>
+            <SelectTrigger className="w-full lg:w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="total">Todos os períodos</SelectItem>
+              {mesesDisponiveis.map((mes) => <SelectItem key={mes} value={mes}>{labelMes(mes)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="relative w-full xl:max-w-xs">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Buscar fornecedor ou pedido" value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9" />
         </div>
@@ -247,36 +270,45 @@ export function PagamentosFornecedores() {
                 <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : filtrados.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
-              ) : filtrados.map((p) => {
-                const vencido = !p.pago_em && p.vencimento < hoje
-                return (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-semibold">
-                      {p.fornecedor}
-                      {p.observacao && <span className="block max-w-52 truncate text-xs font-normal text-muted-foreground">{p.observacao}</span>}
-                      {(p.boleto_path || p.boleto_url || p.codigo_barras) && <span className="block text-xs font-normal text-muted-foreground">Boleto cadastrado</span>}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{p.pedido || "—"}</TableCell>
-                    <TableCell className={vencido ? "font-semibold text-destructive" : ""}>{formatDate(p.vencimento)}</TableCell>
-                    <TableCell className="text-right font-heading font-bold">{formatBRL(p.valor)}</TableCell>
-                    <TableCell>
-                      {p.pago_em ? <Badge className="bg-accent text-accent-foreground">Pago {formatDate(p.pago_em)}</Badge> : vencido ? <Badge variant="destructive">Vencido</Badge> : <Badge variant="secondary">Pendente</Badge>}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => enviarLembrete(p)} disabled={enviandoId === p.id} aria-label="Enviar lembrete no WhatsApp" className="text-muted-foreground hover:text-primary">
-                          {enviandoId === p.id ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => alternarPago(p)} aria-label={p.pago_em ? "Reabrir" : "Marcar como pago"} className={p.pago_em ? "text-muted-foreground" : "text-accent-foreground"}>
-                          {p.pago_em ? <RotateCcw className="size-4" /> : <CheckCircle2 className="size-4" />}
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => abrirEdicao(p)} aria-label="Editar"><Pencil className="size-4" /></Button>
-                        <ConfirmDeleteButton onConfirm={() => excluir(p.id)} />
-                      </div>
-                    </TableCell>
+              ) : (
+                <>
+                  {filtrados.map((p) => {
+                    const vencido = !p.pago_em && p.vencimento < hoje
+                    return (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-semibold">
+                          {p.fornecedor}
+                          {p.observacao && <span className="block max-w-52 truncate text-xs font-normal text-muted-foreground">{p.observacao}</span>}
+                          {(p.boleto_path || p.boleto_url || p.codigo_barras) && <span className="block text-xs font-normal text-muted-foreground">Boleto cadastrado</span>}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{p.pedido || "—"}</TableCell>
+                        <TableCell className={vencido ? "font-semibold text-destructive" : ""}>{formatDate(p.vencimento)}</TableCell>
+                        <TableCell className="text-right font-heading font-bold">{formatBRL(p.valor)}</TableCell>
+                        <TableCell>
+                          {p.pago_em ? <Badge className="bg-accent text-accent-foreground">Pago {formatDate(p.pago_em)}</Badge> : vencido ? <Badge variant="destructive">Vencido</Badge> : <Badge variant="secondary">Pendente</Badge>}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => enviarLembrete(p)} disabled={enviandoId === p.id} aria-label="Enviar lembrete no WhatsApp" className="text-muted-foreground hover:text-primary">
+                              {enviandoId === p.id ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => alternarPago(p)} aria-label={p.pago_em ? "Reabrir" : "Marcar como pago"} className={p.pago_em ? "text-muted-foreground" : "text-accent-foreground"}>
+                              {p.pago_em ? <RotateCcw className="size-4" /> : <CheckCircle2 className="size-4" />}
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => abrirEdicao(p)} aria-label="Editar"><Pencil className="size-4" /></Button>
+                            <ConfirmDeleteButton onConfirm={() => excluir(p.id)} />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                  <TableRow className="border-t-2 bg-muted/30">
+                    <TableCell colSpan={3} className="text-right font-semibold">Total dos registros filtrados</TableCell>
+                    <TableCell className="text-right font-heading text-lg font-extrabold text-primary">{formatBRL(totalFiltrado)}</TableCell>
+                    <TableCell colSpan={2} className="text-xs text-muted-foreground">{filtrados.length} lançamento(s)</TableCell>
                   </TableRow>
-                )
-              })}
+                </>
+              )}
             </TableBody>
           </Table>
         </div>
