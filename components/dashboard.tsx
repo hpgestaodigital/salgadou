@@ -218,14 +218,14 @@ export function Dashboard() {
       )}
 
       <Dialog open={financeiroAberto} onOpenChange={setFinanceiroAberto}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:w-full sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Pendências financeiras</DialogTitle>
             <DialogDescription>
               Escolha o tipo de pagamento que deseja consultar ou pagar.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {mostrarFornecedores && (
               <FinancialDialogCard
                 icon={Truck}
@@ -377,20 +377,22 @@ function FinancialDialogCard({
   href?: string
 }) {
   const card = (
-    <Card className={`h-full border-2 transition-colors ${href ? "hover:border-primary" : "opacity-75"}`}>
-      <CardContent className="flex h-full flex-col p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
+    <Card className={`h-full min-w-0 border-2 transition-colors ${href ? "hover:border-primary" : "opacity-75"}`}>
+      <CardContent className="flex h-full min-w-0 flex-col items-center p-5 text-center sm:p-6">
+        <div className="flex min-w-0 w-full flex-col items-center gap-3">
+          <Icon className="size-8 shrink-0 text-primary sm:size-9" />
+          <div className="min-w-0 w-full">
             <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
-            <p className="mt-3 font-heading text-3xl font-extrabold">{formatBRL(value)}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{count} pagamento(s) pendente(s)</p>
+            <p className="mt-3 break-words font-heading text-2xl font-extrabold leading-tight sm:text-3xl">
+              {formatBRL(value)}
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">{count} pagamento(s) pendente(s)</p>
           </div>
-          <Icon className="size-10 text-primary" />
         </div>
-        <div className="mt-6">
+        <div className="mt-6 w-full min-w-0">
           {href ? (
-            <Button className="w-full" asChild>
-              <span>Abrir pagamentos de {title.toLowerCase()}</span>
+            <Button className="h-auto min-h-10 w-full whitespace-normal px-3 py-2 text-center text-xs leading-snug sm:text-sm" asChild>
+              <span className="block w-full break-words">Abrir pagamentos de {title.toLowerCase()}</span>
             </Button>
           ) : (
             <p className="text-sm text-muted-foreground">Você possui acesso apenas ao resumo desta categoria.</p>
