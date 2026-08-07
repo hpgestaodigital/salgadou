@@ -21,6 +21,24 @@ set nota_paths = array[nota_path]
 where nota_path is not null
   and cardinality(nota_paths) = 0;
 
+-- Depois de registrada, nenhuma das fotos que compõem a nota pode ser apagada
+-- diretamente pelo frontend.
+drop policy if exists "Mercado remove nota de compra" on storage.objects;
+create policy "Mercado remove nota de compra" on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'erp-payment-attachments'
+    and (storage.foldername(name))[1] = 'purchases'
+    and (storage.foldername(name))[2] = (select auth.uid())::text
+    and private.usuario_pode_acessar('producao_compras')
+    and not exists (
+      select 1
+      from public.mercado_compras compra
+      where compra.nota_path = storage.objects.name
+         or storage.objects.name = any(compra.nota_paths)
+    )
+  );
+
 -- Mantém a descrição original e a categoria reconhecida para auditoria/relatórios.
 alter table public.mercado_compra_itens
   add column if not exists descricao_origem text,
@@ -117,8 +135,8 @@ begin
       nota_path = case when cardinality(coalesce(p_nota_paths, '{}'::text[])) > 0 then p_nota_paths[1] else nota_path end
   where id = v_compra_id;
 
-  -- A RPC antiga ignora campos extras do JSON; aqui usamos esses campos somente
-  -- para enriquecer os itens já registrados sem duplicar movimentações.
+  -- O frontend consolida linhas repetidas do mesmo insumo antes de chamar esta RPC.
+  -- Assim podemos enriquecer o item sem criar qualquer nova movimentação de estoque.
   for v_item in select * from jsonb_array_elements(p_itens)
   loop
     update public.mercado_compra_itens
