@@ -5,7 +5,7 @@ import useSWR, { useSWRConfig } from "swr"
 import { ArrowLeft, Loader2, ReceiptText } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { MercadoNoteReader } from "@/components/mercado-note-reader"
+import { MercadoNoteReaderV2 } from "@/components/mercado-note-reader-v2"
 import type { Fornecedor } from "@/lib/types"
 
 type Insumo = { id: string; nome: string; unidade: string; ativo: boolean }
@@ -34,7 +34,7 @@ export function MercadoNotasView() {
         <div>
           <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary"><ReceiptText className="size-4" />Mercado</div>
           <h1 className="font-heading text-2xl font-bold tracking-tight">Notas fiscais</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Envie foto, PDF ou XML, confira os itens reconhecidos e só então registre a entrada no estoque.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Envie foto, PDF ou XML, confira itens e forma de pagamento e só então registre a entrada no estoque.</p>
         </div>
         <Button asChild variant="outline"><Link href="/mercado"><ArrowLeft className="size-4" />Voltar ao Mercado</Link></Button>
       </div>
@@ -42,7 +42,7 @@ export function MercadoNotasView() {
       {carregando ? (
         <div className="grid h-48 place-items-center rounded-xl border"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
       ) : (
-        <MercadoNoteReader
+        <MercadoNoteReaderV2
           fornecedores={fornecedores ?? []}
           insumos={insumos ?? []}
           onSalvo={() => {
