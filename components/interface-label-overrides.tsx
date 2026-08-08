@@ -10,6 +10,15 @@ export function InterfaceLabelOverrides() {
         font-size: 0.875rem;
       }
 
+      a[href="/pagamentos-fornecedores"] > span {
+        font-size: 0;
+      }
+
+      a[href="/pagamentos-fornecedores"] > span::after {
+        content: "Fornec. e outras contas";
+        font-size: 0.875rem;
+      }
+
       [role="dialog"] a[href^="/pagamentos-"] {
         min-width: 0;
         max-width: 100%;
