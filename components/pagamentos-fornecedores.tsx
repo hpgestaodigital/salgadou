@@ -67,7 +67,7 @@ export function PagamentosFornecedores() {
   async function enviarLembrete(p: PagamentoFornecedor) {
     const f = fornecedores.find((x) => x.nome.toLowerCase() === p.fornecedor.toLowerCase())
     if (!f?.whatsapp) {
-      toast.error("Fornecedor sem WhatsApp cadastrado em Cadastros.")
+      toast.error("Esta conta não possui um fornecedor com WhatsApp cadastrado.")
       return
     }
     const template =
@@ -126,6 +126,32 @@ export function PagamentosFornecedores() {
   const totalFiltrado = filtrados.reduce((s, p) => s + Number(p.valor ?? 0), 0)
   const periodoLabel = periodo === "total" ? "todos os períodos" : labelMes(periodo)
 
+  const vencidosOutrosMeses = useMemo(() => {
+    if (periodo === "total") return []
+    const porMes = new Map<string, number>()
+    for (const p of data) {
+      if (p.pago_em || p.vencimento >= hoje) continue
+      const mes = p.vencimento.slice(0, 7)
+      if (mes === periodo) continue
+      porMes.set(mes, (porMes.get(mes) ?? 0) + Number(p.valor ?? 0))
+    }
+    return Array.from(porMes.entries())
+      .map(([mes, valor]) => ({ mes, valor }))
+      .sort((a, b) => b.mes.localeCompare(a.mes))
+  }, [data, hoje, periodo])
+
+  const hintVencidosOutrosMeses = useMemo(() => {
+    if (!vencidosOutrosMeses.length) return undefined
+    if (vencidosOutrosMeses.length === 1) {
+      const item = vencidosOutrosMeses[0]
+      return `+ dívida vencida de ${labelMes(item.mes)}: ${formatBRL(item.valor)}`
+    }
+    const visiveis = vencidosOutrosMeses.slice(0, 2)
+    const detalhes = visiveis.map((item) => `${labelMes(item.mes)}: ${formatBRL(item.valor)}`).join(" · ")
+    const restantes = vencidosOutrosMeses.length - visiveis.length
+    return `+ dívidas vencidas · ${detalhes}${restantes > 0 ? ` · +${restantes} mês(es)` : ""}`
+  }, [vencidosOutrosMeses])
+
   function abrirNovo() {
     setEditId(null)
     setForm(vazio)
@@ -152,7 +178,7 @@ export function PagamentosFornecedores() {
 
   async function salvar() {
     if (!form.fornecedor.trim()) {
-      toast.error("Informe o fornecedor.")
+      toast.error("Informe o fornecedor ou nome da conta.")
       return
     }
     setSaving(true)
@@ -217,14 +243,14 @@ export function PagamentosFornecedores() {
   return (
     <div>
       <PageHeader
-        title="Pagamentos a Fornecedores"
-        description="Controle de contas a pagar, vencimentos e baixas."
+        title="Fornecedores e outras contas"
+        description="Controle de fornecedores, despesas fixas e outras contas a pagar, com vencimentos e baixas."
         action={<Button onClick={abrirNovo}><Plus className="size-4" />Nova conta</Button>}
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label={`A pagar · ${periodoLabel}`} value={formatBRL(totalPendente)} icon={Truck} tone="primary" />
-        <StatCard label={`Vencido · ${periodoLabel}`} value={formatBRL(totalVencido)} icon={AlertTriangle} tone="warning" />
+        <StatCard label={`Vencido · ${periodoLabel}`} value={formatBRL(totalVencido)} hint={hintVencidosOutrosMeses} icon={AlertTriangle} tone="warning" />
         <StatCard label={`Pago · ${periodoLabel}`} value={formatBRL(totalPago)} icon={Wallet} tone="success" />
       </div>
 
@@ -248,7 +274,7 @@ export function PagamentosFornecedores() {
         </div>
         <div className="relative w-full xl:max-w-xs">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Buscar fornecedor ou pedido" value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9" />
+          <Input placeholder="Buscar fornecedor, conta ou pedido" value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9" />
         </div>
       </Card>
 
@@ -257,7 +283,7 @@ export function PagamentosFornecedores() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead>Fornecedor</TableHead>
+                <TableHead>Fornecedor / conta</TableHead>
                 <TableHead>Pedido</TableHead>
                 <TableHead>Vencimento</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
@@ -319,8 +345,8 @@ export function PagamentosFornecedores() {
           <DialogHeader><DialogTitle>{editId ? "Editar conta" : "Nova conta a pagar"}</DialogTitle></DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5 sm:col-span-2">
-              <Label htmlFor="fornecedor">Fornecedor</Label>
-              <Input id="fornecedor" list="lista-fornecedores" value={form.fornecedor} onChange={(e) => setForm({ ...form, fornecedor: e.target.value })} placeholder="Nome do fornecedor" />
+              <Label htmlFor="fornecedor">Fornecedor / nome da conta</Label>
+              <Input id="fornecedor" list="lista-fornecedores" value={form.fornecedor} onChange={(e) => setForm({ ...form, fornecedor: e.target.value })} placeholder="Ex.: fornecedor, energia, aluguel, água..." />
               <datalist id="lista-fornecedores">{fornecedores.map((f) => <option key={f.id} value={f.nome} />)}</datalist>
             </div>
             <div className="grid gap-1.5">
