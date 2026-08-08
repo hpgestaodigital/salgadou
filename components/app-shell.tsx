@@ -60,7 +60,7 @@ const NAV: NavItem[] = [
   { href: "/metas", label: "Metas", icon: Target, modulo: "metas" },
   { href: "/juridico", label: "Jurídico", icon: Scale, modulo: "juridico" },
   { href: "/historico", label: "Histórico", icon: History, modulo: "historico" },
-  { href: "/pagamentos-fornecedores", label: "Pagto. Fornecedores", icon: Truck, modulo: "pagamentos_fornecedores" },
+  { href: "/pagamentos-fornecedores", label: "Fornec. e outras contas", icon: Truck, modulo: "pagamentos_fornecedores" },
   { href: "/pagamentos-motoboys", label: "Pagto. Motoboys", icon: Bike, modulo: "pagamentos_motoboys" },
   { href: "/cadastros", label: "Cadastros", icon: Users, modulo: "cadastros" },
   { href: "/como-usar", label: "Como usar", icon: BookOpenCheck, modulo: "todos" },
@@ -159,6 +159,10 @@ function SidebarContent({ pathname, itens, sessao, logoUrl, onSair, onNavigate }
       <div className="border-t border-sidebar-border px-3 py-4">
         {sessao && <div className="mb-3 flex items-center gap-3 rounded-xl bg-white/[0.035] px-3 py-2.5"><span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-primary/15 text-xs font-bold text-primary">{sessao.avatarUrl ? <img src={sessao.avatarUrl} alt={`Avatar de ${sessao.nome}`} className="size-full object-cover" /> : sessao.nome.slice(0, 2).toUpperCase()}</span><div className="min-w-0"><p className="truncate text-sm font-semibold">{sessao.nome}</p><p className="text-xs text-sidebar-foreground/60">{PAPEL_LABEL[sessao.papel]}</p></div></div>}
         <Button variant="ghost" onClick={onSair} className="w-full justify-start gap-3 text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"><LogOut className="size-[18px]" />Sair</Button>
+        <div className="mt-3 border-t border-sidebar-border/70 pt-3 text-center leading-tight text-sidebar-foreground/45">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em]">ERP V1 concluído</p>
+          <p className="mt-1 text-[9px]">v1.0</p>
+        </div>
       </div>
     </>
   )
