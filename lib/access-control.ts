@@ -12,6 +12,7 @@ export const MODULOS = [
   { key: "reunioes", label: "Reuniões", href: "/reunioes" },
   { key: "juridico", label: "Jurídico", href: "/juridico" },
   { key: "financeiro", label: "Financeiro", href: "/financeiro" },
+  { key: "cmv", label: "CMV por Produto", href: "/cmv" },
   { key: "metas", label: "Metas", href: "/metas" },
   { key: "historico", label: "Histórico", href: "/historico" },
   { key: "pagamentos_fornecedores", label: "Pagto. Fornecedores", href: "/pagamentos-fornecedores" },
@@ -37,6 +38,7 @@ function fallbackPorPapel(papel: Papel): Permissoes {
       escala: true,
       kanban: true,
       reunioes: true,
+      cmv: true,
     }
   }
   if (papel === "financeiro") {
@@ -45,6 +47,7 @@ function fallbackPorPapel(papel: Papel): Permissoes {
       dashboard_fornecedores: true,
       dashboard_motoboys: true,
       financeiro: true,
+      cmv: true,
       pagamentos_fornecedores: true,
       pagamentos_motoboys: true,
     }
