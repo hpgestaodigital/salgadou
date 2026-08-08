@@ -57,6 +57,17 @@ type ItemTrabalho = {
   pode_abrir: boolean
 }
 
+type PendenciaMes = {
+  mes: string
+  valor: number
+  quantidade: number
+}
+
+type PendenciasAnteriores = {
+  fornecedores: PendenciaMes[]
+  motoboys: PendenciaMes[]
+}
+
 const RESUMO_VAZIO: ResumoDashboard = {
   producao_planejada: 0,
   producao_em_andamento: 0,
@@ -70,12 +81,31 @@ const RESUMO_VAZIO: ResumoDashboard = {
   contratos_pendentes: 0,
 }
 
+const PENDENCIAS_ANTERIORES_VAZIO: PendenciasAnteriores = {
+  fornecedores: [],
+  motoboys: [],
+}
+
+function labelMes(mes: string) {
+  const [ano, numeroMes] = mes.split("-").map(Number)
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(ano, numeroMes - 1, 1))
+}
+
+function hintPendenciasAnteriores(itens: PendenciaMes[]) {
+  if (!itens.length) return undefined
+  const visiveis = itens.slice(0, 2)
+  const resumo = visiveis.map((item) => `${labelMes(item.mes)}: ${formatBRL(Number(item.valor))}`).join(" · ")
+  const restantes = itens.length - visiveis.length
+  return `+ pendências de meses anteriores · ${resumo}${restantes > 0 ? ` · +${restantes} mês(es)` : ""}`
+}
+
 export function Dashboard() {
   const supabase = createClient()
   const { data: configuracoes } = useTable<Configuracao>("configuracoes")
   const [nome, setNome] = useState("")
   const [permissoes, setPermissoes] = useState<Permissoes | null>(null)
   const [resumo, setResumo] = useState<ResumoDashboard>(RESUMO_VAZIO)
+  const [pendenciasAnteriores, setPendenciasAnteriores] = useState<PendenciasAnteriores>(PENDENCIAS_ANTERIORES_VAZIO)
   const [meuTrabalho, setMeuTrabalho] = useState<ItemTrabalho[]>([])
   const [loading, setLoading] = useState(true)
   const [financeiroAberto, setFinanceiroAberto] = useState(false)
@@ -90,15 +120,23 @@ export function Dashboard() {
       if (!auth.user || !ativo) return
       setNome(getNome(auth.user))
 
-      const [acessos, resumoResult, trabalhoResult] = await Promise.all([
+      const [acessos, resumoResult, trabalhoResult, anterioresResult] = await Promise.all([
         carregarPermissoes(auth.user),
         supabase.rpc("resumo_dashboard_v1", { semana_inicio_param: semanaInicio }),
         supabase.rpc("listar_meu_trabalho_dashboard"),
+        supabase.rpc("resumo_vencidos_anteriores_dashboard"),
       ])
       if (!ativo) return
       setPermissoes(acessos)
       setResumo(((resumoResult.data ?? [])[0] as ResumoDashboard | undefined) ?? RESUMO_VAZIO)
       setMeuTrabalho((trabalhoResult.data ?? []) as ItemTrabalho[])
+      if (!anterioresResult.error && anterioresResult.data && typeof anterioresResult.data === "object") {
+        const bruto = anterioresResult.data as Partial<PendenciasAnteriores>
+        setPendenciasAnteriores({
+          fornecedores: Array.isArray(bruto.fornecedores) ? bruto.fornecedores : [],
+          motoboys: Array.isArray(bruto.motoboys) ? bruto.motoboys : [],
+        })
+      }
       setLoading(false)
     }
 
@@ -199,9 +237,10 @@ export function Dashboard() {
           {mostrarFornecedores && (
             <FinancialCard
               icon={Truck}
-              title="Fornecedores"
+              title="Fornecedores e outras contas"
               value={Number(resumo.fornecedores_valor)}
               count={Number(resumo.fornecedores_pendentes)}
+              hint={hintPendenciasAnteriores(pendenciasAnteriores.fornecedores)}
               href={podeAbrirFornecedores ? "/pagamentos-fornecedores" : undefined}
             />
           )}
@@ -211,6 +250,7 @@ export function Dashboard() {
               title="Motoboys"
               value={Number(resumo.motoboys_valor)}
               count={Number(resumo.motoboys_pendentes)}
+              hint={hintPendenciasAnteriores(pendenciasAnteriores.motoboys)}
               href={podeAbrirMotoboys ? "/pagamentos-motoboys" : undefined}
             />
           )}
@@ -229,9 +269,10 @@ export function Dashboard() {
             {mostrarFornecedores && (
               <FinancialDialogCard
                 icon={Truck}
-                title="Fornecedores"
+                title="Fornecedores e outras contas"
                 value={Number(resumo.fornecedores_valor)}
                 count={Number(resumo.fornecedores_pendentes)}
+                hint={hintPendenciasAnteriores(pendenciasAnteriores.fornecedores)}
                 href={podeAbrirFornecedores ? "/pagamentos-fornecedores" : undefined}
               />
             )}
@@ -241,6 +282,7 @@ export function Dashboard() {
                 title="Motoboys"
                 value={Number(resumo.motoboys_valor)}
                 count={Number(resumo.motoboys_pendentes)}
+                hint={hintPendenciasAnteriores(pendenciasAnteriores.motoboys)}
                 href={podeAbrirMotoboys ? "/pagamentos-motoboys" : undefined}
               />
             )}
@@ -339,12 +381,14 @@ function FinancialCard({
   title,
   value,
   count,
+  hint,
   href,
 }: {
   icon: typeof Truck
   title: string
   value: number
   count: number
+  hint?: string
   href?: string
 }) {
   const content = (
@@ -354,6 +398,7 @@ function FinancialCard({
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
           <p className="mt-2 font-heading text-2xl font-bold">{formatBRL(value)}</p>
           <p className="mt-1 text-xs text-muted-foreground">{count} pendência(s) no mês</p>
+          {hint && <p className="mt-1 text-xs font-medium text-amber-500">{hint}</p>}
           {!href && <p className="mt-1 text-xs text-muted-foreground">Resumo somente para consulta.</p>}
         </div>
         <Icon className="size-7 text-primary" />
@@ -368,12 +413,14 @@ function FinancialDialogCard({
   title,
   value,
   count,
+  hint,
   href,
 }: {
   icon: typeof Truck
   title: string
   value: number
   count: number
+  hint?: string
   href?: string
 }) {
   const card = (
@@ -386,6 +433,7 @@ function FinancialDialogCard({
             {formatBRL(value)}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">{count} pendência(s) no mês</p>
+          {hint && <p className="mt-2 text-xs font-medium leading-relaxed text-amber-500">{hint}</p>}
         </div>
         {href ? (
           <span className="mt-6 inline-flex min-h-9 w-full items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">
